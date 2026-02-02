@@ -1,0 +1,141 @@
+# BV-BRC Runtime Layer for stabiliNNator
+# Uses dxkb/dev_container:cuda12-ubuntu22.04 for standardized BV-BRC runtime
+#
+# Build with metadata:
+#   ./build.sh
+# Or manually:
+#   docker build --platform linux/amd64 \
+#     --build-arg BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
+#     --build-arg GIT_COMMIT=$(git rev-parse HEAD) \
+#     --build-arg GIT_BRANCH=$(git rev-parse --abbrev-ref HEAD) \
+#     -t dxkb/stabilinnator-bvbrc:latest-gpu -f Dockerfile.stabilinnator-bvbrc .
+#
+# Run:
+#   docker run --gpus all -v $(pwd)/data:/data -v $(pwd)/output:/output \
+#     dxkb/stabilinnator-bvbrc:latest-gpu stabilinnator proline \
+#     --pdb-path /data/input.pdb --output-path /output/output.pdb
+
+FROM --platform=linux/amd64 dxkb/stabilinnator:latest-gpu
+
+# Build arguments for metadata
+ARG BUILD_DATE=unknown
+ARG GIT_COMMIT=unknown
+ARG GIT_BRANCH=unknown
+ARG VERSION=1.0.0
+
+# Standard OCI labels
+LABEL org.opencontainers.image.created="${BUILD_DATE}"
+LABEL org.opencontainers.image.revision="${GIT_COMMIT}"
+LABEL org.opencontainers.image.source="https://github.com/CEPI-dxkb/stabiliNNatorApp"
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.title="stabiliNNator BV-BRC"
+LABEL org.opencontainers.image.description="GNN-based protein stability prediction with BV-BRC AppService integration"
+LABEL org.opencontainers.image.vendor="BV-BRC"
+LABEL org.opencontainers.image.licenses="MIT"
+
+# Application-specific labels
+LABEL maintainer="BV-BRC Team"
+LABEL app.name="StabiliNNator"
+LABEL app.version="${VERSION}"
+LABEL base.stabilinnator="dxkb/stabilinnator:latest-gpu"
+LABEL base.bvbrc="dxkb/dev_container:cuda12-ubuntu22.04"
+LABEL build.date="${BUILD_DATE}"
+LABEL build.git.commit="${GIT_COMMIT}"
+LABEL build.git.branch="${GIT_BRANCH}"
+
+# Copy BV-BRC runtime AND build system from dev_container
+# - /opt/patric-common: Perl 5.40.2 runtime + 200 CPAN modules + p3 CLI tools
+# - /build/dev_container: BV-BRC build system for deploying app code
+COPY --from=dxkb/dev_container:cuda12-ubuntu22.04 /opt/patric-common /opt/patric-common
+COPY --from=dxkb/dev_container:cuda12-ubuntu22.04 /build/dev_container /build/dev_container
+
+# Standard BV-BRC Environment Variables
+ENV RT=/opt/patric-common/runtime
+ENV KB_DEPLOYMENT=/opt/patric-common/deployment
+ENV KB_TOP=/opt/patric-common/deployment
+ENV PERL5LIB=$KB_DEPLOYMENT/lib:$RT/lib/perl5
+ENV PATH=$KB_DEPLOYMENT/bin:$RT/bin:$PATH
+
+# App-specific environment
+ENV KB_MODULE_DIR=/kb/module
+ENV IN_BVBRC_CONTAINER=1
+
+# stabiliNNator specific environment
+ENV STABILINNATOR_DIR=/opt/stabilinnator
+ENV PROLINNATOR_MODEL=/opt/stabilinnator/proliNNator/models/proline_gat.pt
+ENV DISULFINNATE_MODEL=/opt/stabilinnator/disulfiNNate/models/cys_gat.pt
+
+# Add additional BV-BRC modules needed for AppService
+WORKDIR /build/dev_container/modules
+RUN git clone --depth 1 https://github.com/TheSEED/seed_core.git 2>/dev/null || true && \
+    git clone --depth 1 https://github.com/TheSEED/seed_gjo.git 2>/dev/null || true
+
+# Build additional modules using dev_container build system
+WORKDIR /build/dev_container
+RUN . ./user-env.sh && \
+    cd modules/seed_core && make -k 2>/dev/null || true && \
+    cd ../seed_gjo && make -k 2>/dev/null || true
+
+# Copy module libs to deployment
+RUN for mod in seed_core seed_gjo; do \
+        cp -r modules/$mod/lib/* $KB_DEPLOYMENT/lib/ 2>/dev/null || true; \
+    done
+
+# Install missing CPAN modules required by BV-BRC
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libssl-dev \
+        zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && $RT/bin/cpanm --notest Net::SSLeay IO::Socket::SSL LWP::Protocol::https REST::Client Class::Accessor Carp::Always \
+    && rm -rf ~/.cpanm
+
+# Create directories for service components
+RUN mkdir -p /kb/module/service-scripts \
+             /kb/module/app_specs \
+             /kb/module/scripts \
+             /kb/module/lib
+
+# Copy app_specs and service scripts (from build context)
+COPY app_specs/ /kb/module/app_specs/
+COPY service-scripts/ /kb/module/service-scripts/
+
+# Make service scripts executable
+RUN chmod +x /kb/module/service-scripts/*.pl 2>/dev/null || true
+
+# Write build info to container for runtime inspection
+RUN echo "BUILD_DATE=${BUILD_DATE}" > /kb/module/BUILD_INFO && \
+    echo "GIT_COMMIT=${GIT_COMMIT}" >> /kb/module/BUILD_INFO && \
+    echo "GIT_BRANCH=${GIT_BRANCH}" >> /kb/module/BUILD_INFO && \
+    echo "VERSION=${VERSION}" >> /kb/module/BUILD_INFO
+
+# Working directory for data
+WORKDIR /data
+
+# Create entrypoint script using BV-BRC Perl runtime
+RUN echo '#!/bin/bash\n\
+case "$1" in\n\
+    App-StabiliNNator*)\n\
+        exec $RT/bin/perl /kb/module/service-scripts/App-StabiliNNator.pl "${@:2}"\n\
+        ;;\n\
+    stabilinnator)\n\
+        shift\n\
+        exec /usr/local/bin/stabilinnator "$@"\n\
+        ;;\n\
+    prolinnator|proline)\n\
+        shift\n\
+        exec /usr/local/bin/prolinnator "$@"\n\
+        ;;\n\
+    disulfinnate|disulfide)\n\
+        shift\n\
+        exec /usr/local/bin/disulfinnate "$@"\n\
+        ;;\n\
+    bash|sh)\n\
+        exec "$@"\n\
+        ;;\n\
+    *)\n\
+        exec "$@"\n\
+        ;;\n\
+esac' > /entrypoint.sh && chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["stabilinnator"]
