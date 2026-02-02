@@ -1,0 +1,10 @@
+{
+    "_comment": "Example parameters for testing stabiliNNator with real workspace paths",
+    "_instructions": "Update workspace paths below with your actual BV-BRC workspace paths",
+
+    "input_file": "/username@patricbrc.org/home/structures/test_protein.pdb",
+    "analysis_type": "both",
+    "accelerator": "auto",
+    "output_path": "/username@patricbrc.org/home/stabiliNNator_results",
+    "dry_run": false
+}
