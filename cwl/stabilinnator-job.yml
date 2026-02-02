@@ -1,0 +1,24 @@
+# Example job file for stabiliNNator CWL workflow
+# Run with: cwltool stabilinnator.cwl stabilinnator-job.yml
+
+# Input structure file
+input_file:
+  class: File
+  path: ../test_data/test_protein.pdb
+
+# Analysis type: 'proline' or 'disulfide'
+analysis_type: proline
+
+# Optional: custom model file
+# model_path:
+#   class: File
+#   path: /path/to/custom_model.pt
+
+# Optional: hidden dimension (default varies by analysis type)
+# hidden_dim: 128
+
+# Compute device: 'cuda' or 'cpu'
+device: cpu
+
+# Output filename
+output_filename: test_protein_proline.pdb
