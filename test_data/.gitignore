@@ -1,0 +1,3 @@
+# Ignore output files (keep only input test data)
+*_proline.pdb
+*_disulfide.pdb
