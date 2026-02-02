@@ -6,19 +6,16 @@
 #
 # Run proliNNator:
 #   docker run --gpus all -v $(pwd)/data:/data dxkb/stabilinnator:latest-gpu \
-#     python /opt/stabilinnator/proliNNator/proliNNator.py \
-#     --model-path /opt/stabilinnator/proliNNator/models/proline_gat.pt \
-#     --pdb-path /data/input.pdb \
-#     --output-path /data/output_proline.pdb
+#     prolinnator --pdb-path /data/input.pdb --output-path /data/output_proline.pdb
 #
 # Run disulfiNNate:
 #   docker run --gpus all -v $(pwd)/data:/data dxkb/stabilinnator:latest-gpu \
-#     python /opt/stabilinnator/disulfiNNate/predict_cysteine_probabilities.py \
-#     --model-path /opt/stabilinnator/disulfiNNate/models/cys_gat.pt \
-#     --pdb-path /data/input.pdb \
-#     --output-path /data/output_disulfide.pdb
+#     disulfinnate --pdb-path /data/input.pdb --output-path /data/output_disulfide.pdb
 
-FROM nvidia/cuda:11.8.0-cudnn8-runtime-ubuntu22.04
+ARG STABILINNATOR_VERSION=main
+ARG CUDA_VERSION=11.8.0
+
+FROM nvidia/cuda:${CUDA_VERSION}-cudnn8-runtime-ubuntu22.04 AS gpu
 
 # Build arguments for metadata
 ARG BUILD_DATE=unknown
@@ -70,39 +67,68 @@ RUN pip3 install --no-cache-dir \
     torchaudio==2.1.0 \
     --index-url https://download.pytorch.org/whl/cu118
 
-# Install PyTorch Geometric and dependencies
+# Install dependencies - using pyg-lib and torch_geometric approach from original stabiliNNator
+# Pin numpy<2 for PyTorch 2.1 compatibility
+# Use torch-geometric 1.7.2 which has the old GATConv API (single lin layer)
 RUN pip3 install --no-cache-dir \
-    torch-scatter \
-    torch-sparse \
-    torch-cluster \
-    torch-spline-conv \
-    -f https://data.pyg.org/whl/torch-2.1.0+cu118.html
-
-RUN pip3 install --no-cache-dir \
+    "numpy>=1.24.0,<2.0.0" \
+    torch-scatter -f https://data.pyg.org/whl/torch-2.1.0+cu118.html && \
+    pip3 install --no-cache-dir \
+    torch-sparse -f https://data.pyg.org/whl/torch-2.1.0+cu118.html && \
+    pip3 install --no-cache-dir \
+    torch-cluster -f https://data.pyg.org/whl/torch-2.1.0+cu118.html && \
+    pip3 install --no-cache-dir \
+    torch-spline-conv -f https://data.pyg.org/whl/torch-2.1.0+cu118.html && \
+    pip3 install --no-cache-dir \
     torch-geometric==2.4.0 \
     biopython>=1.81 \
-    numpy>=1.24.0 \
     matplotlib>=3.7.0 \
     scikit-learn>=1.2.0
 
-# Create directory for stabiliNNator
-RUN mkdir -p /opt/stabilinnator
+# Clone stabiliNNator from GitHub
+ARG STABILINNATOR_VERSION
+RUN git clone https://github.com/schoederlab/stabiliNNator.git /opt/stabilinnator \
+    && cd /opt/stabilinnator \
+    && git checkout ${STABILINNATOR_VERSION}
 
-# Copy stabiliNNator source code (from build context or mounted)
-# Note: In production, this would clone from GitHub or copy from build context
-COPY proliNNator/ /opt/stabilinnator/proliNNator/
-COPY disulfiNNate/ /opt/stabilinnator/disulfiNNate/
+# Copy checkpoint conversion script and convert old model format to new PyTorch Geometric format
+COPY convert_checkpoint.py /tmp/convert_checkpoint.py
+RUN python /tmp/convert_checkpoint.py \
+    /opt/stabilinnator/proliNNator/models/proline_gat.pt \
+    /opt/stabilinnator/proliNNator/models/proline_gat_converted.pt \
+    && mv /opt/stabilinnator/proliNNator/models/proline_gat_converted.pt \
+       /opt/stabilinnator/proliNNator/models/proline_gat.pt \
+    && python /tmp/convert_checkpoint.py \
+       /opt/stabilinnator/disulfiNNate/models/cys_gat.pt \
+       /opt/stabilinnator/disulfiNNate/models/cys_gat_converted.pt \
+    && mv /opt/stabilinnator/disulfiNNate/models/cys_gat_converted.pt \
+       /opt/stabilinnator/disulfiNNate/models/cys_gat.pt \
+    && rm /tmp/convert_checkpoint.py
 
 # Set working directory
 WORKDIR /opt/stabilinnator
 
-# Create wrapper scripts for easier invocation
+# Set default model paths
+ENV STABILINNATOR_DIR=/opt/stabilinnator
+ENV PROLINNATOR_MODEL=/opt/stabilinnator/proliNNator/models/proline_gat.pt
+ENV DISULFINNATE_MODEL=/opt/stabilinnator/disulfiNNate/models/cys_gat.pt
+
+# Create wrapper scripts for easier invocation (with default model paths and hidden_dim)
+# Note: proliNNator model was trained with hidden_dim=32, not the script default of 128
 RUN echo '#!/bin/bash\n\
-python /opt/stabilinnator/proliNNator/proliNNator.py "$@"' > /usr/local/bin/prolinnator && \
+MODEL_PATH="${PROLINNATOR_MODEL:-/opt/stabilinnator/proliNNator/models/proline_gat.pt}"\n\
+ARGS=""\n\
+[[ "$*" != *"--model-path"* ]] && ARGS="$ARGS --model-path $MODEL_PATH"\n\
+[[ "$*" != *"--hidden-dim"* ]] && ARGS="$ARGS --hidden-dim 32"\n\
+exec python /opt/stabilinnator/proliNNator/proliNNator.py $ARGS "$@"' > /usr/local/bin/prolinnator && \
     chmod +x /usr/local/bin/prolinnator
 
 RUN echo '#!/bin/bash\n\
-python /opt/stabilinnator/disulfiNNate/predict_cysteine_probabilities.py "$@"' > /usr/local/bin/disulfinnate && \
+MODEL_PATH="${DISULFINNATE_MODEL:-/opt/stabilinnator/disulfiNNate/models/cys_gat.pt}"\n\
+ARGS=""\n\
+[[ "$*" != *"--model-path"* ]] && ARGS="$ARGS --model-path $MODEL_PATH"\n\
+[[ "$*" != *"--hidden-dim"* ]] && ARGS="$ARGS --hidden-dim 32"\n\
+exec python /opt/stabilinnator/disulfiNNate/predict_cysteine_probabilities.py $ARGS "$@"' > /usr/local/bin/disulfinnate && \
     chmod +x /usr/local/bin/disulfinnate
 
 # Create combined wrapper
