@@ -12,7 +12,9 @@
 #   docker run --gpus all -v $(pwd)/data:/data dxkb/stabilinnator:latest-gpu \
 #     disulfinnate --pdb-path /data/input.pdb --output-path /data/output_disulfide.pdb
 
-ARG STABILINNATOR_VERSION=main
+# Pin to specific commit for reproducibility
+# https://github.com/schoederlab/stabiliNNator/commit/28f0fc99b12be333d7143bd560f9279ce1374caa
+ARG STABILINNATOR_VERSION=28f0fc99b12be333d7143bd560f9279ce1374caa
 ARG CUDA_VERSION=11.8.0
 
 FROM nvidia/cuda:${CUDA_VERSION}-cudnn8-runtime-ubuntu22.04 AS gpu
