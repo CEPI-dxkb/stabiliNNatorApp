@@ -163,13 +163,40 @@ grep "^ATOM" output_proline.pdb | awk '{print substr($0, 61, 6)}' | sort -n | ta
 
 ## Test Proteins
 
-Test proteins included in the repository (`test_data/`):
+Test proteins are included in the repository (`test_data/`):
 
 | File | PDB ID | Residues | Description |
 |------|--------|----------|-------------|
 | 1crn_small.pdb | 1CRN | 46 | Crambin - small plant protein |
 | 3ft7.pdb | 3FT7 | 90 | Medium test protein |
 | 3pgk_large.pdb | 3PGK | 415 | Phosphoglycerate kinase - large enzyme |
+
+### Obtaining Test Data
+
+The test proteins are sourced from [RCSB Protein Data Bank](https://www.rcsb.org/). They are committed to the repository in `test_data/`, but can also be downloaded fresh:
+
+```bash
+# Download test proteins from RCSB PDB
+cd test_data
+
+# Small protein - Crambin (46 residues)
+curl -O https://files.rcsb.org/download/1CRN.pdb
+mv 1CRN.pdb 1crn_small.pdb
+
+# Medium protein (90 residues)
+curl -O https://files.rcsb.org/download/3FT7.pdb
+mv 3FT7.pdb 3ft7.pdb
+
+# Large protein - Phosphoglycerate kinase (415 residues)
+curl -O https://files.rcsb.org/download/3PGK.pdb
+mv 3PGK.pdb 3pgk_large.pdb
+```
+
+Or use the download script:
+
+```bash
+./test_data/download_test_proteins.sh
+```
 
 ## Technical Notes
 
