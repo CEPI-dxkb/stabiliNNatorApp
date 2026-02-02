@@ -1,0 +1,68 @@
+{
+    "id": "StabiliNNator",
+    "script": "App-StabiliNNator",
+    "label": "Protein Stability Prediction (stabiliNNator)",
+    "description": "Predict protein stability improvements using Graph Neural Networks. proliNNator predicts proline mutation probabilities at each residue position, while disulfiNNate predicts disulfide bond formation likelihood between cysteine pairs. Both analyses output PDB files with probabilities encoded in the B-factor column (0-1 range).",
+    "default_memory": "8G",
+    "default_cpu": 4,
+    "default_runtime": 600,
+    "parameters": [
+        {
+            "id": "input_file",
+            "type": "wsfile",
+            "required": 1,
+            "label": "Input Structure File",
+            "desc": "Protein structure file in PDB or mmCIF format. The structure must contain standard amino acids with CA atoms."
+        },
+        {
+            "id": "analysis_type",
+            "type": "enum",
+            "required": 1,
+            "default": "both",
+            "enum": ["proline", "disulfide", "both"],
+            "label": "Analysis Type",
+            "desc": "Type of stability analysis to perform. 'proline' predicts favorable proline mutation sites, 'disulfide' predicts favorable disulfide bond sites, 'both' runs both analyses."
+        },
+        {
+            "id": "hidden_dim",
+            "type": "int",
+            "required": 0,
+            "default": 32,
+            "label": "Hidden Dimension",
+            "desc": "Hidden dimension size for the neural network. Default is 32 for disulfiNNate and 128 for proliNNator. Only modify if using custom-trained models."
+        },
+        {
+            "id": "accelerator",
+            "type": "enum",
+            "required": 0,
+            "default": "auto",
+            "enum": ["auto", "gpu", "cpu"],
+            "label": "Compute Device",
+            "desc": "Hardware accelerator to use. 'auto' will use GPU if available, otherwise CPU. 'gpu' forces GPU usage (fails if unavailable). 'cpu' forces CPU usage."
+        },
+        {
+            "id": "output_path",
+            "type": "folder",
+            "required": 1,
+            "label": "Output Folder",
+            "desc": "Workspace folder where prediction results will be saved. Output includes annotated PDB files with probabilities in the B-factor column."
+        },
+        {
+            "id": "dry_run",
+            "type": "bool",
+            "default": false,
+            "required": 0,
+            "label": "Dry Run",
+            "desc": "Download and prepare all input data but do not execute predictions. Useful for testing workspace file access and data preparation."
+        }
+    ],
+    "preflight": {
+        "cpu": 4,
+        "memory": "8G",
+        "runtime": 600,
+        "storage": "5G",
+        "policy_data": {
+            "gpu_count": 0
+        }
+    }
+}
