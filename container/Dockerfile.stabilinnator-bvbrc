@@ -85,6 +85,7 @@ RUN for mod in seed_core seed_gjo; do \
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libssl-dev \
         zlib1g-dev \
+        make \
     && rm -rf /var/lib/apt/lists/* \
     && $RT/bin/cpanm --notest Net::SSLeay IO::Socket::SSL LWP::Protocol::https REST::Client Class::Accessor Carp::Always \
     && rm -rf ~/.cpanm
