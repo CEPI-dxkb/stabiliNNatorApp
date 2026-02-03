@@ -120,16 +120,14 @@ For a 500-residue protein running both analyses on CPU:
 - Recommended runtime: 600s (with buffer)
 - Memory: 2GB (conservative)
 
-## Comparison to Other BV-BRC Tools
+## Resource Comparison
 
-| Tool | Typical Runtime | Memory | GPU Required |
-|------|----------------|--------|--------------|
-| **stabiliNNator** | **<1 min** | **1-2 GB** | **No** |
-| Chai-Lab | 30-120 min | 64-96 GB | Yes (A100) |
-| Boltz | 30-90 min | 64 GB | Yes (A100) |
-| AlphaFold | 60-240 min | 64 GB | Yes (A100) |
+stabiliNNator is a lightweight prediction tool that runs efficiently on CPU:
+- **Runtime**: <1 min for typical proteins
+- **Memory**: 500 MB - 1 GB
+- **GPU**: Not required (CPU is actually faster due to CUDA overhead)
 
-stabiliNNator is **60-100x faster** and uses **30-60x less memory** than structure prediction tools, making it ideal for CPU-only deployments.
+This makes stabiliNNator ideal for CPU-only deployments and batch processing scenarios.
 
 ## Testing Commands
 
@@ -223,5 +221,24 @@ Or use the download script:
 
 ## Pending Work
 
-- [ ] Batch processing benchmarks
-- [ ] Very large protein tests (>1000 residues)
+- [ ] Batch processing benchmarks - run `tests/benchmark_batch_large.sh`
+- [ ] Very large protein tests (>1000 residues) - included in benchmark script
+
+### Benchmark Script
+
+Run on native x86_64 with Docker or Singularity:
+
+```bash
+# With Docker
+./tests/benchmark_batch_large.sh docker
+
+# With Singularity
+./tests/benchmark_batch_large.sh singularity
+```
+
+The script will:
+1. Download large test proteins (up to ~1500 residues)
+2. Benchmark individual proteins (proliNNator + disulfiNNate)
+3. Run batch processing test (10 proteins sequentially)
+4. Validate all outputs
+5. Save results to timestamped log file
