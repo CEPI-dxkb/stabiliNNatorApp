@@ -1,0 +1,21 @@
+# Singularity/Apptainer container images (large binary files)
+*.sif
+
+# Benchmark results (regeneratable)
+benchmark_results/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db

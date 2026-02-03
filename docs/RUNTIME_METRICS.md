@@ -23,26 +23,35 @@ Both tools use Graph Attention Networks (GAT) and are relatively lightweight com
 
 ## Actual Test Results
 
-### Test Environment (Emulated)
+### Test Environment (Native x86_64 with GPU)
 
-- **Platform**: macOS ARM64 (Apple Silicon)
-- **Execution**: Docker with x86_64 emulation (Rosetta 2)
-- **Container**: `dxkb/stabilinnator:latest-gpu`
-- **Device**: CPU mode (`--device cpu`)
+- **Platform**: Linux x86_64 (native)
+- **Host**: lambda13 (AMD EPYC 9654 96-Core, 384 threads, 1.5TB RAM)
+- **GPU**: 8x NVIDIA H100 NVL (95GB each)
+- **Container Runtime**: Apptainer/Singularity 1.3.4
+- **Container Image**: `dxkb/stabilinnator:latest-gpu` (4.2GB SIF)
+- **Benchmark Date**: 2026-02-03
 
-**Important**: These times include significant emulation overhead (~15s container startup). Native x86_64 execution will be substantially faster.
+### Measured Performance (Native x86_64)
 
-### Measured Performance (Emulated x86_64 on ARM64)
+| Protein | PDB ID | Residues | Atoms | proliNNator GPU | proliNNator CPU | disulfiNNate GPU | disulfiNNate CPU |
+|---------|--------|----------|-------|-----------------|-----------------|------------------|------------------|
+| Small | 1CRN | 46 | 327 | 9.4s | 6.2s | 9.2s | 5.6s |
+| Medium | 3FT7 | 90 | 736 | 9.5s | 5.6s | 9.6s | 5.5s |
+| Large | 3PGK | 415 | 3145 | 9.3s | 5.4s | 9.3s | 5.2s |
 
-| Protein | PDB ID | Residues | Atoms | proliNNator | disulfiNNate | Total (both) |
-|---------|--------|----------|-------|-------------|--------------|--------------|
-| Small | 1CRN | 46 | 327 | ~18s | ~19s | ~37s |
-| Medium | 3FT7 | 90 | 736 | ~17s | ~17s | ~34s |
-| Large | 3PGK | 415 | 3145 | ~20s | ~19s | ~39s |
+**Key Finding: CPU mode is faster than GPU mode** for these lightweight models. CUDA initialization overhead (~3-4s) exceeds any compute savings from GPU acceleration.
+
+### Memory Usage
+
+| Device | Peak Memory | Notes |
+|--------|-------------|-------|
+| CPU | ~450-470 MB | Minimal memory footprint |
+| GPU | ~780-810 MB | Higher due to CUDA libraries |
 
 ### Output Validation
 
-All outputs validated successfully:
+All outputs validated successfully (3 runs each, consistent results):
 
 | Protein | proliNNator B-factor | disulfiNNate B-factor |
 |---------|---------------------|----------------------|
@@ -50,18 +59,16 @@ All outputs validated successfully:
 | 3FT7 (medium) | 0.00 - 0.95 | 0.00 - 0.99 |
 | 3PGK (large) | 0.00 - 1.00 | 0.00 - 0.98 |
 
-### Estimated Native Performance
+### Performance Summary
 
-Based on emulation overhead analysis, estimated native x86_64 performance:
+| Protein Size | Residues | Recommended Device | Wall Time | Peak Memory |
+|--------------|----------|-------------------|-----------|-------------|
+| Small | ~50 | CPU | 5-6s | ~460 MB |
+| Medium | ~100 | CPU | 5-6s | ~460 MB |
+| Large | ~500 | CPU | 5-6s | ~470 MB |
+| Very Large | ~1000+ | CPU (or GPU) | TBD | TBD |
 
-| Protein Size | Residues | GPU Time | CPU Time | Peak Memory |
-|--------------|----------|----------|----------|-------------|
-| Small | ~50 | <1s | 2-3s | ~500 MB |
-| Medium | ~100 | <1s | 2-4s | ~600 MB |
-| Large | ~500 | 1-2s | 3-5s | ~800 MB |
-| Very Large | ~1000 | 2-3s | 5-10s | ~1 GB |
-
-**GPU testing pending** - see [Issue #12](https://github.com/CEPI-dxkb/stabiliNNatorApp/issues/12) for detailed testing instructions.
+**Recommendation**: Use CPU mode (`--device cpu`) for all protein sizes. GPU provides no benefit due to the small model size.
 
 ## Preflight Resource Defaults
 
@@ -88,19 +95,21 @@ Based on the benchmarks above, the recommended default resources for the BV-BRC 
 
 The preflight function scales resources based on input:
 
-1. **CPU-only mode (default)**:
-   - Base runtime: 60s (includes container startup)
-   - Add 0.5s per residue for large proteins
-   - Memory: 1GB base (sufficient for all tested sizes)
+1. **CPU mode (recommended)**:
+   - Base runtime: 30s (includes container startup)
+   - Add 0.1s per residue for very large proteins (>500 residues)
+   - Memory: 512MB base (sufficient for all tested sizes)
+   - **Note**: CPU mode is faster than GPU for stabiliNNator's small models
 
-2. **GPU mode (optional)**:
+2. **GPU mode (not recommended)**:
    - Base runtime: 30s
    - Minimal scaling with protein size
    - Requires `gpu_count: 1`
+   - **Note**: CUDA initialization overhead makes GPU slower than CPU
 
 3. **Analysis type**:
    - Single analysis (proline OR disulfide): use base times
-   - Both analyses: multiply by 1.8x
+   - Both analyses: multiply by 2x
 
 ### Example Preflight Calculation
 
@@ -200,15 +209,19 @@ Or use the download script:
 
 ## Technical Notes
 
-1. **Container startup dominates runtime** - For small proteins, container initialization (~15s emulated, ~2-3s native) is the main cost
+1. **Container startup dominates runtime** - Container initialization (~3-4s) is a significant portion of total runtime
 2. **Model loading is fast** - Models are only 14-22KB, loading is sub-second
-3. **GPU provides minimal speedup** - The models are so small that GPU overhead may exceed compute savings for small proteins
-4. **Memory usage is minimal** - Peak memory well under 1GB for all tested proteins
-5. **disulfiNNate has O(n²) edge computation** - Builds spatial edges between all residue pairs within 6Å cutoff, but still fast
+3. **CPU is faster than GPU** - CUDA initialization overhead (~3-4s) exceeds any compute savings for these tiny models
+4. **Memory usage is minimal** - Peak memory ~450-800MB depending on device mode
+5. **Protein size has minimal impact** - The GNN inference is so fast that runtime is dominated by container/library overhead
+6. **disulfiNNate has O(n²) edge computation** - Builds spatial edges between all residue pairs within 6Å cutoff, but still fast
+
+## Completed Benchmarking
+
+- [x] Native x86_64 GPU benchmarks (Issue #12) - **CPU recommended over GPU**
+- [x] Memory profiling with `/usr/bin/time -v` - ~450MB CPU, ~780MB GPU
 
 ## Pending Work
 
-- [ ] Native x86_64 GPU benchmarks (see Issue #12)
-- [ ] Memory profiling with `/usr/bin/time -v`
 - [ ] Batch processing benchmarks
 - [ ] Very large protein tests (>1000 residues)
