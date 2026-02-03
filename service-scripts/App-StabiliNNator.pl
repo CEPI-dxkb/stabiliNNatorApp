@@ -59,27 +59,43 @@ stabiliNNator is lightweight compared to structure prediction tools.
 sub preflight {
     my ($app, $app_def, $raw_params, $params) = @_;
 
-    # Base resource estimates for GNN-based prediction
-    my $cpu = 4;
-    my $memory = "8G";
-    my $runtime = 300;  # 5 minutes base
-    my $storage = "5G";
+    # Resource estimates based on actual benchmarks (see docs/RUNTIME_METRICS.md)
+    # Benchmark environment: AMD EPYC 9654, NVIDIA H100, Singularity container
+    #
+    # Key findings:
+    # - CPU mode is FASTER than GPU (CUDA overhead exceeds compute savings)
+    # - Container startup (~3-4s) dominates runtime
+    # - Actual inference is sub-second for most proteins
+    # - Memory usage is ~500MB even for very large proteins (8,000 residues)
+
+    my $cpu = 2;           # Sufficient for GNN inference
+    my $memory = "1G";     # Benchmarked at ~500MB, 1G provides buffer
+    my $runtime = 30;      # Base: container startup + model loading
+    my $storage = "1G";    # Output PDBs are small
 
     # Adjust based on analysis type
     my $analysis_type = $params->{analysis_type} // 'both';
 
     if ($analysis_type eq 'both') {
-        $runtime = 600;  # 10 minutes for both analyses
+        $runtime = 60;     # Both analyses: ~12s actual, 60s with buffer
     }
 
-    # GPU mode (optional, not required)
-    my $accelerator = $params->{accelerator} // 'auto';
+    # Note: GPU mode is NOT recommended for stabiliNNator
+    # Benchmarks show CPU is faster due to small model size (14-22KB)
+    # CUDA initialization overhead (~3-4s) exceeds any compute savings
+    my $accelerator = $params->{accelerator} // 'cpu';
     my $gpu_count = 0;
 
     if ($accelerator eq 'gpu') {
         $gpu_count = 1;
-        $runtime = int($runtime / 3);  # GPU is ~3x faster
+        # GPU is actually slower, but user explicitly requested it
+        # Keep same runtime (don't reduce)
     }
+
+    # For very large proteins (>1000 residues), disulfiNNate has O(n²) scaling
+    # Add buffer for edge computation: 1AON (8,015 residues) took 18.6s
+    # Without knowing protein size at preflight, use conservative estimate
+    $runtime = $runtime * 2;  # 2x buffer for safety
 
     return {
         cpu => $cpu,
@@ -88,7 +104,7 @@ sub preflight {
         storage => $storage,
         policy_data => {
             gpu_count => $gpu_count,
-            partition => $gpu_count > 0 ? 'gpu' : 'normal',
+            partition => 'normal',  # Always use normal partition (CPU is faster)
         }
     };
 }
@@ -127,7 +143,7 @@ sub run_stabilinnator {
     # Get analysis parameters
     my $analysis_type = $params->{analysis_type} // 'both';
     my $hidden_dim = $params->{hidden_dim};
-    my $accelerator = $params->{accelerator} // 'auto';
+    my $accelerator = $params->{accelerator} // 'cpu';  # CPU is faster than GPU for these models
 
     # Determine device
     my $device = determine_device($accelerator);
@@ -160,7 +176,7 @@ sub run_stabilinnator {
         print "\n=== Running proliNNator (proline probability prediction) ===\n";
 
         my $proline_output = "$output_dir/${input_basename}_proline.pdb";
-        my $proline_hidden_dim = $hidden_dim // 128;  # proliNNator default
+        my $proline_hidden_dim = $hidden_dim // 32;  # Model trained with hidden_dim=32
 
         my @cmd = (
             "python",
