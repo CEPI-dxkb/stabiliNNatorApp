@@ -1,0 +1,14 @@
+# Example job file for disulfiNNate analysis
+# Run with: cwltool stabilinnator.cwl stabilinnator-disulfide-job.yml
+
+input_file:
+  class: File
+  path: ../test_data/3ft7.pdb
+
+analysis_type: disulfide
+
+hidden_dim: 32
+
+device: cpu
+
+output_filename: 3ft7_disulfide.pdb

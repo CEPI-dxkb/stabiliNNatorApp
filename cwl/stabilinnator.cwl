@@ -20,28 +20,32 @@ requirements:
   DockerRequirement:
     dockerPull: dxkb/stabilinnator:latest-gpu
   ResourceRequirement:
-    coresMin: 4
-    ramMin: 8192  # 8GB
-    tmpdirMin: 5120  # 5GB
+    # Based on benchmarks: ~500MB memory, minimal CPU needed
+    # See docs/RUNTIME_METRICS.md for full benchmark data
+    coresMin: 2
+    ramMin: 1024  # 1GB (benchmarked at ~500MB)
+    tmpdirMin: 1024  # 1GB
   InlineJavascriptRequirement: {}
 
-hints:
-  cwltool:CUDARequirement:
-    cudaVersionMin: "11.8"
-    cudaDeviceCountMin: 1
-    cudaDeviceCountMax: 1
+# Note: GPU is NOT recommended - CPU is actually faster for these small models
+# CUDA initialization overhead (~3-4s) exceeds compute savings
+# CUDARequirement removed since GPU provides no benefit
 
-baseCommand: [python]
+baseCommand: []
 
 arguments:
+  # Use wrapper scripts which provide default model paths and hidden_dim=32
   - valueFrom: |
       ${
         if (inputs.analysis_type === 'disulfide') {
-          return '/opt/stabilinnator/disulfiNNate/predict_cysteine_probabilities.py';
+          return 'disulfinnate';
         }
-        return '/opt/stabilinnator/proliNNator/proliNNator.py';
+        return 'prolinnator';
       }
     position: 0
+  - prefix: --output-path
+    valueFrom: $(inputs.output_filename)
+    position: 5
 
 inputs:
   input_file:
@@ -77,26 +81,28 @@ inputs:
 
   hidden_dim:
     type: int?
+    default: 32
     inputBinding:
       prefix: --hidden-dim
       position: 3
     doc: |
       Hidden dimension size for the neural network.
-      Default: 128 for proliNNator, 32 for disulfiNNate.
+      Default: 32 (both models were trained with hidden_dim=32).
       Only modify if using custom-trained models.
 
   device:
     type:
       - "null"
       - type: enum
-        symbols: [cuda, cpu]
-    default: cuda
+        symbols: [cpu, cuda]
+    default: cpu
     inputBinding:
       prefix: --device
       position: 4
     doc: |
-      Compute device to use. 'cuda' for GPU, 'cpu' for CPU.
-      GPU is recommended but not required.
+      Compute device to use. 'cpu' for CPU, 'cuda' for GPU.
+      CPU is recommended - benchmarks show CPU is faster than GPU
+      due to CUDA initialization overhead exceeding compute savings.
 
   output_filename:
     type: string?
@@ -113,11 +119,6 @@ outputs:
       Values range from 0 to 1:
       - For proline analysis: higher values = more favorable for proline substitution
       - For disulfide analysis: higher values = higher likelihood of disulfide bond
-
-arguments:
-  - prefix: --output-path
-    valueFrom: $(inputs.output_filename)
-    position: 5
 
 stdout: stabilinnator_stdout.txt
 stderr: stabilinnator_stderr.txt
