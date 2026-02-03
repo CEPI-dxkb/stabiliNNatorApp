@@ -3,9 +3,9 @@
     "script": "App-StabiliNNator",
     "label": "Protein Stability Prediction (stabiliNNator)",
     "description": "Predict protein stability improvements using Graph Neural Networks. proliNNator predicts proline mutation probabilities at each residue position, while disulfiNNate predicts disulfide bond formation likelihood between cysteine pairs. Both analyses output PDB files with probabilities encoded in the B-factor column (0-1 range).",
-    "default_memory": "8G",
-    "default_cpu": 4,
-    "default_runtime": 600,
+    "default_memory": "1G",
+    "default_cpu": 2,
+    "default_runtime": 120,
     "parameters": [
         {
             "id": "input_file",
@@ -29,16 +29,16 @@
             "required": 0,
             "default": 32,
             "label": "Hidden Dimension",
-            "desc": "Hidden dimension size for the neural network. Default is 32 for disulfiNNate and 128 for proliNNator. Only modify if using custom-trained models."
+            "desc": "Hidden dimension size for the neural network. Default is 32 (both models were trained with hidden_dim=32). Only modify if using custom-trained models."
         },
         {
             "id": "accelerator",
             "type": "enum",
             "required": 0,
-            "default": "auto",
-            "enum": ["auto", "gpu", "cpu"],
+            "default": "cpu",
+            "enum": ["cpu", "gpu"],
             "label": "Compute Device",
-            "desc": "Hardware accelerator to use. 'auto' will use GPU if available, otherwise CPU. 'gpu' forces GPU usage (fails if unavailable). 'cpu' forces CPU usage."
+            "desc": "Hardware accelerator to use. CPU is recommended (faster than GPU for these small models due to CUDA overhead). GPU option available but provides no performance benefit."
         },
         {
             "id": "output_path",
@@ -57,10 +57,10 @@
         }
     ],
     "preflight": {
-        "cpu": 4,
-        "memory": "8G",
-        "runtime": 600,
-        "storage": "5G",
+        "cpu": 2,
+        "memory": "1G",
+        "runtime": 120,
+        "storage": "1G",
         "policy_data": {
             "gpu_count": 0
         }
