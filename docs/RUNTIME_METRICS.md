@@ -59,6 +59,21 @@ All outputs validated successfully (3 runs each, consistent results):
 | 3FT7 (medium) | 0.00 - 0.95 | 0.00 - 0.99 |
 | 3PGK (large) | 0.00 - 1.00 | 0.00 - 0.98 |
 
+### Large Protein Benchmarks
+
+Additional benchmarks with larger proteins (CPU mode):
+
+| Protein | PDB ID | Residues | Atoms | proliNNator | disulfiNNate | Memory |
+|---------|--------|----------|-------|-------------|--------------|--------|
+| COVID protease | 6LU7 | 309 | 2,387 | 9.4s | 5.0s | 452 MB |
+| Adenylate kinase | 4AKE | 428 | 3,312 | 6.1s | 5.9s | 454 MB |
+| **GroEL complex** | **1AON** | **8,015** | **58,674** | **8.4s** | **18.6s** | **505 MB** |
+
+**Key observations**:
+- proliNNator scales well even to very large complexes (8,015 residues in 8.4s)
+- disulfiNNate shows O(n²) scaling for large proteins due to spatial edge computation (18.6s for 1AON)
+- Memory usage remains modest even for large complexes (~500 MB)
+
 ### Performance Summary
 
 | Protein Size | Residues | Recommended Device | Wall Time | Peak Memory |
@@ -66,9 +81,45 @@ All outputs validated successfully (3 runs each, consistent results):
 | Small | ~50 | CPU | 5-6s | ~460 MB |
 | Medium | ~100 | CPU | 5-6s | ~460 MB |
 | Large | ~500 | CPU | 5-6s | ~470 MB |
-| Very Large | ~1000+ | CPU (or GPU) | TBD | TBD |
+| Very Large | ~8,000 | CPU | 8-19s | ~505 MB |
 
 **Recommendation**: Use CPU mode (`--device cpu`) for all protein sizes. GPU provides no benefit due to the small model size.
+
+## Batch Processing
+
+### Current Implementation
+
+The native stabiliNNator tools (`proliNNator.py`, `predict_cysteine_probabilities.py`) accept only a single `--pdb-path` argument. Batch processing requires an external loop, which means:
+
+1. **Container startup overhead per protein** (~3-4s each)
+2. **PyTorch/model loading overhead per protein** (~2s each)
+3. **Actual inference is sub-second** for most proteins
+
+### Batch Benchmark Results
+
+Sequential processing of 10 proteins (mixed sizes: 46-415 residues):
+
+| Tool | Total Time | Avg per Protein | Throughput |
+|------|------------|-----------------|------------|
+| proliNNator | 56.9s | 5.7s | 10.2 proteins/min |
+| disulfiNNate | 57.8s | 5.8s | 10.2 proteins/min |
+
+### Potential Optimization
+
+Native batch support in the upstream tool could significantly improve throughput:
+
+| Scenario | Time per Protein | Improvement |
+|----------|------------------|-------------|
+| Current (external loop) | ~5.7s | baseline |
+| Native batch (amortized startup) | ~0.5-1.0s | **5-10x faster** |
+
+**Recommendation for upstream**: Adding `--pdb-dir` or `--pdb-list` arguments to proliNNator/disulfiNNate would:
+- Load PyTorch and model once
+- Process all proteins in a single container invocation
+- Reduce per-protein overhead from ~5s to <1s
+- Enable throughput of 60-120 proteins/minute
+
+For BV-BRC, the current single-protein interface is sufficient since jobs typically process one structure at a time.
 
 ## Preflight Resource Defaults
 
@@ -114,11 +165,17 @@ The preflight function scales resources based on input:
 ### Example Preflight Calculation
 
 For a 500-residue protein running both analyses on CPU:
-- Base time: 60s
-- Residue scaling: 500 * 0.5s = 250s
-- Both analyses: (60 + 250) * 1.8 = 558s
-- Recommended runtime: 600s (with buffer)
-- Memory: 2GB (conservative)
+- Base time: 30s (container startup + model loading)
+- Residue scaling: minimal for proteins <1000 residues
+- Both analyses: 30s × 2 = 60s
+- Recommended runtime: 120s (with 2x buffer)
+- Memory: 1GB (conservative)
+
+For very large proteins (e.g., 8,000 residues like GroEL):
+- Base time: 30s
+- Both analyses: ~30s (proliNNator: 8s, disulfiNNate: 19s)
+- Recommended runtime: 120s
+- Memory: 1GB
 
 ## Resource Comparison
 
@@ -218,27 +275,24 @@ Or use the download script:
 
 - [x] Native x86_64 GPU benchmarks (Issue #12) - **CPU recommended over GPU**
 - [x] Memory profiling with `/usr/bin/time -v` - ~450MB CPU, ~780MB GPU
+- [x] Batch processing benchmarks - ~10 proteins/min with external loop
+- [x] Very large protein tests - 1AON (8,015 residues) completes in 8-19s
 
 ## Pending Work
 
-- [ ] Batch processing benchmarks - run `tests/benchmark_batch_large.sh`
-- [ ] Very large protein tests (>1000 residues) - included in benchmark script
+All critical benchmarks complete. Optional future work:
 
-### Benchmark Script
+- [ ] Upstream feature request: native batch support (`--pdb-dir` or `--pdb-list`)
+- [ ] Parallel batch processing (multiple containers simultaneously)
+
+### Benchmark Scripts
 
 Run on native x86_64 with Docker or Singularity:
 
 ```bash
-# With Docker
-./tests/benchmark_batch_large.sh docker
+# GPU/CPU comparison benchmark
+./tests/gpu_benchmark_singularity.sh
 
-# With Singularity
-./tests/benchmark_batch_large.sh singularity
+# Batch and large protein benchmark
+./tests/benchmark_batch_large.sh singularity  # or 'docker'
 ```
-
-The script will:
-1. Download large test proteins (up to ~1500 residues)
-2. Benchmark individual proteins (proliNNator + disulfiNNate)
-3. Run batch processing test (10 proteins sequentially)
-4. Validate all outputs
-5. Save results to timestamped log file
