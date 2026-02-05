@@ -1,0 +1,5 @@
+{
+    "input_file": "/test/protein.pdb",
+    "analysis_type": "both",
+    "output_path": "/test/output"
+}
