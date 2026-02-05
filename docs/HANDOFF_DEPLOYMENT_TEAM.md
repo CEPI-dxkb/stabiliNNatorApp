@@ -55,16 +55,18 @@ cd container/
 
 ### Default Allocation
 
+Based on actual benchmarks (see [RUNTIME_METRICS.md](RUNTIME_METRICS.md)):
+
 ```json
 {
-    "default_cpu": 4,
-    "default_memory": "8G",
-    "default_runtime": 600,
+    "default_cpu": 2,
+    "default_memory": "1G",
+    "default_runtime": 120,
     "preflight": {
-        "cpu": 4,
-        "memory": "8G",
-        "runtime": 600,
-        "storage": "5G",
+        "cpu": 2,
+        "memory": "1G",
+        "runtime": 120,
+        "storage": "1G",
         "policy_data": {
             "gpu_count": 0,
             "partition": "normal"
@@ -75,21 +77,24 @@ cd container/
 
 ### Scaling Notes
 
-- **Memory**: 8GB sufficient for most proteins; large proteins (>1000 residues) may need 16GB
-- **CPU**: 4 cores is optimal; more cores don't significantly improve performance
-- **GPU**: Optional; provides ~3x speedup but CPU is acceptable
-- **Storage**: 5GB is generous; actual disk usage is minimal (<100MB)
+- **Memory**: 1GB sufficient for all proteins tested (up to 8,015 residues); actual usage ~500MB
+- **CPU**: 2 cores is sufficient; these are small GNN models (~14-22KB)
+- **GPU**: **Not recommended** - CPU is actually faster due to CUDA initialization overhead
+- **Storage**: 1GB is generous; actual disk usage is minimal (<50MB)
 
 ### Comparison to Other Apps
 
 | App | CPU | Memory | GPU Required | Typical Runtime |
 |-----|-----|--------|--------------|-----------------|
-| stabiliNNator | 4 | 8GB | No | 1-10 min |
+| stabiliNNator | 2 | 1GB | No (CPU faster) | 5-60 sec |
 | Chai-Lab | 8 | 64GB | Yes (A100) | 30-120 min |
 | Boltz | 8 | 64GB | Yes (A100) | 30-90 min |
 | AlphaFold | 8 | 64GB | Yes (A100) | 60-240 min |
 
-stabiliNNator is significantly lighter and can run on the `normal` partition.
+stabiliNNator is **significantly lighter** than structure prediction tools:
+- ~60x less memory than Chai/Boltz/AlphaFold
+- ~100x faster runtime
+- No GPU required (CPU is actually faster for these small models)
 
 ## Deployment Steps
 
@@ -120,6 +125,70 @@ curl -s https://p3.theseed.org/services/app_service/app | jq '.[] | select(.id==
 docker run -v $(pwd)/test:/data dxkb/stabilinnator-bvbrc:latest-gpu \
     App-StabiliNNator '{"input_file":"/data/test.pdb","output_path":"/data/output","dry_run":true}'
 ```
+
+## Workspace Integration Testing
+
+### Authentication
+
+To test with real BV-BRC workspace, you need a valid PATRIC token:
+
+```bash
+# 1. Login to BV-BRC (creates ~/.patric_token)
+p3-login your_username
+
+# 2. Verify login status
+p3-login --status
+
+# 3. Export token as environment variable
+export P3_AUTH_TOKEN=$(cat ~/.patric_token)
+```
+
+### Testing with Workspace Files
+
+```bash
+# Pass token to container via environment variable
+docker run --rm \
+    -e "P3_AUTH_TOKEN=$P3_AUTH_TOKEN" \
+    dxkb/stabilinnator-bvbrc:latest-gpu \
+    p3-ls /your_user@bvbrc/home/
+
+# Test full workspace integration
+docker run --rm \
+    -e "P3_AUTH_TOKEN=$P3_AUTH_TOKEN" \
+    -v /path/to/app:/app:ro \
+    dxkb/stabilinnator-bvbrc:latest-gpu \
+    perl /app/service-scripts/App-StabiliNNator.pl \
+        http://localhost \
+        /app/app_specs/StabiliNNator.json \
+        /app/tests/workspace_test.json
+```
+
+### Test Parameters (tests/workspace_test.json)
+
+```json
+{
+    "input_file": "/your_user@bvbrc/home/path/to/protein.pdb",
+    "analysis_type": "both",
+    "output_path": "/your_user@bvbrc/home/path/to/output"
+}
+```
+
+### Token Location
+
+The PATRIC token is stored at `~/.patric_token` after running `p3-login`. The token format is:
+```
+un=user@bvbrc|tokenid=...|expiry=...|client_id=...|token_type=Bearer|...
+```
+
+### Important Notes
+
+1. **Token Expiry**: Tokens expire; check `expiry` field in token string
+2. **Shock Files**: Workspace files are stored in Shock; the service script uses `use_shock=1` parameter to download actual content
+3. **Alternative**: You can also mount the token file directly:
+   ```bash
+   docker run -v ~/.patric_token:/root/.patric_token:ro ...
+   ```
+   However, `P3_AUTH_TOKEN` environment variable is preferred for production.
 
 ## Container Entry Points
 
@@ -179,21 +248,23 @@ Typical disk usage: <50MB per job.
 
 ## GPU Configuration
 
-### GPU Optional
+### CPU Recommended
 
-Unlike Chai/Boltz/AlphaFold, stabiliNNator does **not require** GPU:
+Unlike Chai/Boltz/AlphaFold, stabiliNNator **should use CPU**:
 
 ```bash
-# CPU mode (default)
+# CPU mode (default, recommended)
 docker run dxkb/stabilinnator-bvbrc:latest-gpu App-StabiliNNator params.json
 
-# GPU mode (optional, ~3x faster)
+# GPU mode (available but NOT recommended)
 docker run --gpus all dxkb/stabilinnator-bvbrc:latest-gpu App-StabiliNNator params.json
 ```
 
+**Why CPU is faster**: The GNN models are very small (~14-22KB). CUDA initialization overhead (~3-5 seconds) exceeds the actual inference time on GPU, making CPU faster for typical workloads.
+
 ### CUDA Requirements
 
-If GPU is used:
+If GPU is used (not recommended):
 - CUDA 11.8+ compatible driver
 - cuDNN 8.x
 - NVIDIA GPU with compute capability 3.5+
