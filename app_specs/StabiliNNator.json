@@ -54,6 +54,13 @@
             "required": 0,
             "label": "Dry Run",
             "desc": "Download and prepare all input data but do not execute predictions. Useful for testing workspace file access and data preparation."
+        },
+        {
+            "id": "output_file",
+            "type": "wsfile",
+            "required": 0,
+            "label": "Output File",
+            "desc": "Optional output file path. Not used by this app (outputs go to output_path folder)."
         }
     ],
     "preflight": {
