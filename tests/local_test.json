@@ -1,0 +1,5 @@
+{
+    "input_file": "/test_data/1crn_small.pdb",
+    "analysis_type": "proline",
+    "output_path": "/awilke@bvbrc/home/AppTests/StabiliNNator/output_local"
+}

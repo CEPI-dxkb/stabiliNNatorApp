@@ -319,7 +319,8 @@ sub download_workspace_file {
     # Use workspace API to download
     if ($app && $app->can('workspace')) {
         try {
-            $app->workspace->download_file($ws_path, $local_path);
+            # Pass use_shock=1 to properly download files stored in Shock
+            $app->workspace->download_file($ws_path, $local_path, 1);
         } catch {
             die "Failed to download $ws_path: $_\n";
         };
