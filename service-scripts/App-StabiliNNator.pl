@@ -360,15 +360,14 @@ sub upload_results {
             try {
                 # Determine file type for workspace
                 my $type = "txt";
-                if ($file =~ /\.pdb$/i) {
-                    $type = "structure";
-                } elsif ($file =~ /\.(cif|mmcif)$/i) {
+                if ($file =~ /\.(pdb|cif|mmcif)$/i) {
                     $type = "structure";
                 } elsif ($file =~ /\.json$/i) {
                     $type = "json";
                 }
 
-                $app->workspace->save_file_to_file($file, {}, $ws_file);
+                # Pass type and enable overwrite
+                $app->workspace->save_file_to_file($file, {}, $ws_file, $type, 1);
             } catch {
                 warn "Failed to upload $file: $_\n";
             };
