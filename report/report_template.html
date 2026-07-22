@@ -133,6 +133,16 @@ footer code{color:var(--sulfur); font-family:var(--mono)}
 :focus-visible{outline:2px solid var(--proline); outline-offset:2px; border-radius:3px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 .hidden{display:none!important}
+.track-toggle{font-family:var(--sans); font-size:12.5px; font-weight:600; color:var(--proline); background:none; border:1px solid var(--line-strong); border-radius:8px; padding:6px 13px; cursor:pointer; margin-top:12px}
+.track-toggle:hover{border-color:var(--proline)}
+.wrap-track{display:flex; flex-wrap:wrap; gap:3px; margin-top:4px; align-items:flex-start}
+.wrap-cell{width:23px; height:26px; border-radius:4px; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:13px; border:1px solid var(--line-strong)}
+.wrap-cell.cys{border-color:var(--sulfur); border-width:2px; font-weight:700}
+.wrap-cell.bonded{box-shadow:0 0 0 2px var(--sulfur-soft)}
+.chain-label{flex-basis:100%; font-family:var(--sans); font-size:11px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin:12px 0 2px}
+.chain-label:first-child{margin-top:0}
+.bond-chips{display:flex; flex-wrap:wrap; gap:6px; margin-top:14px}
+.bond-chip{font-family:var(--mono); font-size:11.5px; color:var(--sulfur); border:1px solid var(--sulfur); border-radius:999px; padding:2px 9px}
 </style>
 
 <div class="wrap">
@@ -321,54 +331,143 @@ const hideTip=()=>tip.style.opacity=0;
   co.innerHTML=html;
 })();
 
-/* sequence heat track */
+/* sequence stability track. Scales with size:
+   - <= SINGLE_MAX residues: detailed single-row letter track with disulfide arcs
+   - larger: a downsampled overview (default) + an expandable wrapped multi-row
+     letter view. Cells key by (chain,pos) so multi-chain proteins with repeated
+     residue numbers don't collide. */
 (()=>{
-  const svg=document.getElementById('track'), res=DATA.per_residue, n=res.length;
-  const cw=26,ch=30,padL=8,padR=8,topArc=DATA.disulfide_bonds.length?52:14,labelH=16;
-  const W=padL+padR+n*cw, H=topArc+ch+labelH+6;
-  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width',W); svg.setAttribute('height',H);
-  svg.style.minWidth=Math.min(W,680)+'px';
-  const idx={}; res.forEach((r,k)=>idx[r.pos]=k);
-  const cx=pos=>padL+(idx[pos]+0.5)*cw;
-  DATA.disulfide_bonds.forEach(b=>{
-    if(idx[b.a]==null||idx[b.b]==null)return;
-    let x1=cx(b.a),x2=cx(b.b); if(x1>x2)[x1,x2]=[x2,x1];
-    const r=(x2-x1)/2, mx=(x1+x2)/2, ry=Math.min(r*0.62,34);
-    svg.appendChild(el('path',{class:'arc',d:`M ${x1} ${topArc} A ${r} ${ry} 0 0 1 ${x2} ${topArc}`}));
-    [x1,x2].forEach(xx=>svg.appendChild(el('circle',{cx:xx,cy:topArc,r:2.4,fill:'var(--sulfur)'})));
-    const lab=el('text',{class:'arc-lab',x:mx,y:topArc-ry-4,'text-anchor':'middle'});
-    lab.textContent=`${b.a}–${b.b}`; svg.appendChild(lab);
-  });
-  res.forEach((r,k)=>{
-    const pr=r.proline_p==null?0:r.proline_p, x=padL+k*cw+2, y=topArc, w=cw-4, h=ch-4;
-    const g=el('g',{class:'hcell',tabindex:0,role:'img'});
-    g.appendChild(el('rect',{x,y,width:w,height:h,rx:4,
-      fill:`color-mix(in oklab, var(--proline) ${Math.round(pr*100)}%, var(--seq-base))`,
-      stroke:r.is_cys?'var(--sulfur)':'var(--line-strong)','stroke-width':r.is_cys?2:1}));
-    const t=el('text',{x:x+w/2,y:y+h/2+4,'text-anchor':'middle','font-size':13,'font-weight':r.is_cys?700:500,
-      fill:r.is_cys?'var(--sulfur)':(pr>0.5?'var(--seq-hi-text)':'var(--body)')});
-    t.textContent=r.one; g.appendChild(t);
-    if(r.pos%5===0){const tk=el('text',{class:'axis-lab',x:x+w/2,y:topArc+ch+10,'text-anchor':'middle'});tk.textContent=r.pos;svg.appendChild(tk);}
-    const parts=[`<b>${r.res} ${r.pos}</b>${r.is_cys?' · Cys':''}`];
-    if(r.proline_p!=null)parts.push(`proline p = ${r.proline_p.toFixed(2)}`);
-    if(r.disulfide_p!=null)parts.push(`disulfide p = ${r.disulfide_p.toFixed(2)}`);
-    const html=parts.join('<br>');
-    g.addEventListener('mousemove',e=>showTip(html,e.clientX,e.clientY));
-    g.addEventListener('mouseleave',hideTip);
-    g.addEventListener('focus',()=>{const b=g.getBoundingClientRect();showTip(html,b.right,b.top);});
-    g.addEventListener('blur',hideTip);
-    svg.appendChild(g);
-  });
+  const res=DATA.per_residue, n=res.length, bonds=DATA.disulfide_bonds;
+  const svg=document.getElementById('track');
+  const SINGLE_MAX=150;
+  const keyIdx={}; res.forEach((r,k)=>keyIdx[r.chain+'/'+r.pos]=k);
+  const cellColor=pr=>`color-mix(in oklab, var(--proline) ${Math.round((pr==null?0:pr)*100)}%, var(--seq-base))`;
+  const tipHtml=r=>{
+    const p=[`<b>${r.res} ${r.pos}</b>${(r.chain&&r.chain!=='-')?' · chain '+r.chain:''}${r.is_cys?' · Cys':''}`];
+    if(r.proline_p!=null)p.push(`proline p = ${r.proline_p.toFixed(2)}`);
+    if(r.disulfide_p!=null)p.push(`disulfide p = ${r.disulfide_p.toFixed(2)}`);
+    return p.join('<br>');
+  };
+  const bondOf=r=>bonds.find(b=>(b.chain_a===r.chain&&b.a===r.pos)||(b.chain_b===r.chain&&b.b===r.pos));
+
+  // ---- detailed single-row SVG (small proteins), with chain gaps + arcs ----
+  function renderDetailed(){
+    const cw=26,ch=30,pad=8,gap=14,labelH=16,topArc=bonds.length?52:16;
+    const xs=[]; let x=pad,prevCh=null;
+    res.forEach(r=>{ if(prevCh!==null&&r.chain!==prevCh)x+=gap; xs.push(x); x+=cw; prevCh=r.chain; });
+    const W=x+pad, H=topArc+ch+labelH+6;
+    svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width',W); svg.setAttribute('height',H);
+    svg.style.minWidth=Math.min(W,680)+'px';
+    const cx=(ch_,pos)=>{const k=keyIdx[ch_+'/'+pos]; return k==null?null:xs[k]+cw/2;};
+    bonds.forEach(b=>{
+      let x1=cx(b.chain_a,b.a), x2=cx(b.chain_b,b.b); if(x1==null||x2==null)return;
+      if(x1>x2)[x1,x2]=[x2,x1];
+      const r=(x2-x1)/2, mx=(x1+x2)/2, ry=Math.min(r*0.62,34);
+      svg.appendChild(el('path',{class:'arc',d:`M ${x1} ${topArc} A ${r} ${ry} 0 0 1 ${x2} ${topArc}`}));
+      [x1,x2].forEach(xx=>svg.appendChild(el('circle',{cx:xx,cy:topArc,r:2.4,fill:'var(--sulfur)'})));
+      const lab=el('text',{class:'arc-lab',x:mx,y:topArc-ry-4,'text-anchor':'middle'}); lab.textContent=`${b.a}–${b.b}`; svg.appendChild(lab);
+    });
+    let prev=null;
+    res.forEach((r,k)=>{
+      const xx=xs[k], y=topArc, w=cw-4, h=ch-4, pr=r.proline_p==null?0:r.proline_p;
+      if(prev!==null&&r.chain!==prev){const cl=el('text',{class:'axis-lab',x:xx+2,y:topArc-3,'text-anchor':'start','font-weight':700});cl.textContent=r.chain;svg.appendChild(cl);}
+      prev=r.chain;
+      const g=el('g',{class:'hcell',tabindex:0,role:'img'});
+      g.appendChild(el('rect',{x:xx+2,y,width:w,height:h,rx:4,fill:cellColor(pr),
+        stroke:r.is_cys?'var(--sulfur)':'var(--line-strong)','stroke-width':r.is_cys?2:1}));
+      const t=el('text',{x:xx+2+w/2,y:y+h/2+4,'text-anchor':'middle','font-size':13,'font-weight':r.is_cys?700:500,
+        fill:r.is_cys?'var(--sulfur)':(pr>0.5?'var(--seq-hi-text)':'var(--body)')}); t.textContent=r.one; g.appendChild(t);
+      if(r.pos%5===0){const tk=el('text',{class:'axis-lab',x:xx+2+w/2,y:topArc+ch+10,'text-anchor':'middle'});tk.textContent=r.pos;svg.appendChild(tk);}
+      const html=tipHtml(r);
+      g.addEventListener('mousemove',e=>showTip(html,e.clientX,e.clientY));
+      g.addEventListener('mouseleave',hideTip);
+      g.addEventListener('focus',()=>{const bb=g.getBoundingClientRect();showTip(html,bb.right,bb.top);});
+      g.addEventListener('blur',hideTip); svg.appendChild(g);
+    });
+  }
+
+  // ---- downsampled overview (large proteins) ----
+  function renderOverview(mount){
+    const maxW=900, MAXCELLS=1500;
+    const bin=Math.ceil(n/Math.min(n,MAXCELLS)), m=Math.ceil(n/bin);
+    const cw=Math.max(2,Math.min(12,Math.floor(maxW/m))), ch=30, W=m*cw+2, H=ch+6;
+    const s=el('svg',{viewBox:`0 0 ${W} ${H}`,width:W,height:H}); s.style.maxWidth='100%'; s.style.height='auto';
+    for(let i=0;i<m;i++){
+      const slice=res.slice(i*bin,(i+1)*bin); if(!slice.length)break;
+      const maxPr=Math.max(...slice.map(r=>r.proline_p==null?0:r.proline_p));
+      const anyCys=slice.some(r=>r.is_cys), a=slice[0], b=slice[slice.length-1];
+      const g=el('g',{class:'hcell',tabindex:0});
+      g.appendChild(el('rect',{x:i*cw+1,y:2,width:Math.max(cw-0.4,1),height:ch-4,
+        fill:cellColor(maxPr),stroke:anyCys?'var(--sulfur)':'none','stroke-width':anyCys?1.5:0}));
+      const html=`<b>${a.chain}${a.pos}${bin>1?`–${b.chain}${b.pos}`:''}</b><br>max proline p = ${maxPr.toFixed(2)}${anyCys?'<br>contains cysteine':''}`;
+      g.addEventListener('mousemove',e=>showTip(html,e.clientX,e.clientY));
+      g.addEventListener('mouseleave',hideTip); s.appendChild(g);
+    }
+    mount.appendChild(s);
+    const note=document.createElement('div'); note.className='figcap'; note.style.marginTop='8px';
+    note.innerHTML=bin>1
+      ? `<b>Downsampled overview.</b> ${n} residues binned into ${m} columns (each shaded by the highest proline score in ${bin} residues); cysteine-containing bins outlined in gold.`
+      : `<b>Overview.</b> one column per residue, shaded by proline score; cysteines outlined in gold.`;
+    mount.appendChild(note);
+  }
+
+  // ---- expandable wrapped full track (letters, multi-row, chain-broken) ----
+  function renderWrapped(mount){
+    const wt=document.createElement('div'); wt.className='wrap-track';
+    let prevCh=null;
+    res.forEach(r=>{
+      if(r.chain!==prevCh){const lb=document.createElement('div'); lb.className='chain-label'; lb.textContent=`Chain ${r.chain}`; wt.appendChild(lb); prevCh=r.chain;}
+      const pr=r.proline_p==null?0:r.proline_p, bd=bondOf(r);
+      const c=document.createElement('div');
+      c.className='wrap-cell'+(r.is_cys?' cys':'')+(bd?' bonded':'');
+      c.style.background=cellColor(pr);
+      c.style.color=r.is_cys?'var(--sulfur)':(pr>0.5?'var(--seq-hi-text)':'var(--body)');
+      c.textContent=r.one;
+      const html=tipHtml(r)+(bd?`<br>↔ Cys${(bd.chain_a===r.chain&&bd.a===r.pos)?bd.b:bd.a} (disulfide)`:'');
+      c.addEventListener('mousemove',e=>showTip(html,e.clientX,e.clientY));
+      c.addEventListener('mouseleave',hideTip); wt.appendChild(c);
+    });
+    mount.appendChild(wt);
+    if(bonds.length){
+      const chips=document.createElement('div'); chips.className='bond-chips';
+      chips.innerHTML='<span style="font-family:var(--sans);font-size:11.5px;color:var(--muted);align-self:center">disulfides:</span>'+
+        bonds.map(b=>`<span class="bond-chip">Cys${b.a}–Cys${b.b}${b.chain_a!==b.chain_b?` (${b.chain_a}/${b.chain_b})`:''}</span>`).join('');
+      mount.appendChild(chips);
+    }
+  }
+
+  // ---- legend + assemble ----
   const lg=document.getElementById('track-legend'); const L=[];
-  if(hasPro)L.push(`<span><span class="swatch" style="background:var(--proline)"></span>proline substitution probability (cell shade)</span>`);
-  if(DATA.input.cys_positions.length)L.push(`<span><span class="swatch" style="background:var(--sulfur)"></span>cysteine${DATA.disulfide_bonds.length?' · disulfide bond':''}</span>`);
+  if(hasPro)L.push(`<span><span class="swatch" style="background:var(--proline)"></span>proline substitution probability</span>`);
+  if(DATA.input.cys_positions.length)L.push(`<span><span class="swatch" style="background:var(--sulfur)"></span>cysteine${bonds.length?' · disulfide':''}</span>`);
   lg.innerHTML=L.join('');
-  document.getElementById('track-cap').innerHTML=
-    `<b>Sequence stability track.</b> Each cell is one residue`+
-    (hasPro?`, shaded by its proline score (deeper teal = higher)`:``)+
-    `. Cysteines are outlined in gold`+
-    (DATA.disulfide_bonds.length?`; arcs trace disulfide bonds detected in the structure`:``)+
-    `. Hover any residue for its exact scores.`;
+
+  if(n<=SINGLE_MAX){
+    renderDetailed();
+    document.getElementById('track-cap').innerHTML=
+      `<b>Sequence stability track.</b> Each cell is one residue`+
+      (hasPro?`, shaded by its proline score (deeper teal = higher)`:``)+
+      `. Cysteines outlined in gold`+
+      (bonds.length?`; arcs trace disulfide bonds detected in the structure`:``)+
+      (DATA.input.chains.length>1?`. Chains are separated by a gap`:``)+
+      `. Hover any residue for its exact scores.`;
+  } else {
+    const host=svg.parentNode; svg.remove();
+    const ovWrap=document.createElement('div'); host.appendChild(ovWrap); renderOverview(ovWrap);
+    const full=document.createElement('div'); full.className='hidden'; full.style.marginTop='10px'; host.appendChild(full);
+    const btn=document.createElement('button'); btn.className='track-toggle'; btn.setAttribute('aria-expanded','false');
+    btn.textContent='Expand full sequence ▾'; host.appendChild(btn);
+    let built=false;
+    btn.addEventListener('click',()=>{
+      const showing=!full.classList.contains('hidden');
+      if(showing){full.classList.add('hidden'); btn.setAttribute('aria-expanded','false'); btn.textContent='Expand full sequence ▾';}
+      else{ if(!built){renderWrapped(full); built=true;} full.classList.remove('hidden'); btn.setAttribute('aria-expanded','true'); btn.textContent='Collapse ▴';}
+    });
+    document.getElementById('track-cap').innerHTML=
+      `<b>Sequence overview.</b> ${n} residues`+
+      (DATA.input.chains.length>1?` across ${DATA.input.chains.length} chains`:``)+
+      `, shaded by proline score; cysteines outlined in gold. Disulfide bonds are listed in the summary above — expand for the full per-residue sequence.`;
+  }
 })();
 
 /* bar charts */

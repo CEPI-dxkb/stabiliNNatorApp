@@ -141,6 +141,11 @@ sub run_stabilinnator {
     my $file_format = validate_structure_file($local_input);
     print "Detected file format: $file_format\n";
 
+    # Collapse NMR / multi-model ensembles to the first model. The GNN tools
+    # otherwise treat every model as extra residues (e.g. a 38-model, 20-residue
+    # ensemble becomes 760 concatenated residues).
+    strip_to_first_model($local_input) if $file_format eq 'PDB';
+
     # Get analysis parameters
     my $analysis_type = $params->{analysis_type} // 'both';
     my $hidden_dim = $params->{hidden_dim};
@@ -294,6 +299,37 @@ sub validate_structure_file {
     }
 
     die "Input file does not appear to be in PDB or mmCIF format.\n";
+}
+
+=head2 strip_to_first_model
+
+If a PDB contains multiple MODEL records (e.g. an NMR ensemble), rewrite it in
+place keeping only the first model. Records before the first MODEL (header) are
+retained. No-op for single-model files.
+
+=cut
+
+sub strip_to_first_model {
+    my ($file) = @_;
+
+    my @lines = read_file($file);
+    my $n_models = grep { /^MODEL\s/ } @lines;
+    return if $n_models <= 1;
+
+    print "Input has $n_models models; keeping first model only\n";
+
+    my @out;
+    my $seen = 0;
+    for my $l (@lines) {
+        if ($l =~ /^MODEL\s/) {
+            $seen++;
+            last if $seen > 1;   # start of second model
+            next;                # drop the MODEL record itself
+        }
+        last if $seen >= 1 && $l =~ /^ENDMDL/;
+        push @out, $l;
+    }
+    write_file($file, @out);
 }
 
 =head2 determine_device

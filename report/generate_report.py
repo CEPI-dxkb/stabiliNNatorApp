@@ -50,49 +50,70 @@ OUTPUT_KINDS = [
 ]
 
 
+def first_model_lines(path):
+    """Yield the lines of the FIRST model only.
+
+    NMR ensembles (and some other files) contain many MODEL/ENDMDL blocks with
+    identical residues. The native tools and this parser would otherwise treat
+    them as one giant concatenated chain (e.g. 38 x 20 = 760 "residues"). Header
+    records before the first MODEL are kept; everything from the second MODEL on
+    is dropped. Files with no MODEL records are yielded unchanged.
+    """
+    seen_model = False
+    with open(path) as fh:
+        for line in fh:
+            if line.startswith("MODEL"):
+                if seen_model:
+                    return
+                seen_model = True
+                continue
+            if line.startswith("ENDMDL") and seen_model:
+                return
+            yield line
+
+
 def parse_ca_bfactors(path):
     """One representative (CA) record per residue -> list of dicts.
 
     All atoms of a residue carry the same B-factor value, so CA is a faithful
-    single sample. HETATM and records without a CA are ignored.
+    single sample. HETATM and records without a CA are ignored. First model only.
     """
     rows = []
-    with open(path) as fh:
-        for line in fh:
-            if not line.startswith("ATOM"):
-                continue
-            if line[12:16].strip() != "CA":
-                continue
-            try:
-                prob = float(line[60:66])
-            except ValueError:
-                continue
-            rows.append({
-                "chain": line[21].strip() or "A",
-                "pos": int(line[22:26]),
-                "icode": line[26].strip(),
-                "res": line[17:20].strip(),
-                "prob": prob,
-            })
+    for line in first_model_lines(path):
+        if not line.startswith("ATOM"):
+            continue
+        if line[12:16].strip() != "CA":
+            continue
+        try:
+            prob = float(line[60:66])
+        except ValueError:
+            continue
+        rows.append({
+            "chain": line[21].strip() or "A",
+            "pos": int(line[22:26]),
+            "icode": line[26].strip(),
+            "res": line[17:20].strip(),
+            "prob": prob,
+        })
     return rows
 
 
 def parse_sg_atoms(path):
-    """Cysteine SG atoms as (chain, pos, x, y, z) -- used for bond detection."""
+    """Cysteine SG atoms as (chain, pos, x, y, z) -- used for bond detection.
+    First model only."""
     out = []
-    with open(path) as fh:
-        for line in fh:
-            if not line.startswith(("ATOM", "HETATM")):
-                continue
-            if line[12:16].strip() != "SG":
-                continue
-            if line[17:20].strip() not in CYS_NAMES:
-                continue
-            try:
-                xyz = (float(line[30:38]), float(line[38:46]), float(line[46:54]))
-            except ValueError:
-                continue
-            out.append((line[21].strip() or "A", int(line[22:26]), xyz))
+    for line in first_model_lines(path):
+        if not line.startswith(("ATOM", "HETATM")):
+            continue
+        if line[12:16].strip() != "SG":
+            continue
+        if line[17:20].strip() not in CYS_NAMES:
+            continue
+        try:
+            xyz = (float(line[30:38]), float(line[38:46]), float(line[46:54]))
+        except ValueError:
+            continue
+        out.append((line[21].strip() or "A", int(line[22:26]), xyz))
     return out
 
 
