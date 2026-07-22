@@ -10,6 +10,11 @@ IMAGE_BASE="stabilinnator"
 IMAGE_BVBRC="stabilinnator-bvbrc"
 VERSION="${VERSION:-1.0.0}"
 
+# Target architecture. Docker Hub images are consumed on linux/amd64 HPC nodes
+# (and converted to Apptainer there), so amd64 is the default even when building
+# on an arm64 host. Override with --platform or the PLATFORM env var.
+PLATFORM="${PLATFORM:-linux/amd64}"
+
 # Capture build metadata
 BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
 GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
@@ -19,6 +24,7 @@ echo "Building stabiliNNator Docker images"
 echo "====================================="
 echo "Registry: $REGISTRY"
 echo "Version: $VERSION"
+echo "Platform: $PLATFORM"
 echo "Build Date: $BUILD_DATE"
 echo "Git Commit: $GIT_COMMIT"
 echo "Git Branch: $GIT_BRANCH"
@@ -53,6 +59,10 @@ while [[ $# -gt 0 ]]; do
             STABILINNATOR_SRC="$2"
             shift 2
             ;;
+        --platform)
+            PLATFORM="$2"
+            shift 2
+            ;;
         --help|-h)
             echo "Usage: $0 [OPTIONS]"
             echo ""
@@ -62,6 +72,7 @@ while [[ $# -gt 0 ]]; do
             echo "  --all               Build all images"
             echo "  --push              Push images to registry after build"
             echo "  --stabilinnator-src Path to stabiliNNator source (for base image)"
+            echo "  --platform ARCH     Target architecture (default: linux/amd64)"
             echo "  --help, -h          Show this help message"
             exit 0
             ;;
@@ -101,7 +112,7 @@ if [ "$BUILD_BASE" = true ]; then
     cp -r "$STABILINNATOR_SRC/proliNNator" "$BUILD_CONTEXT/"
     cp -r "$STABILINNATOR_SRC/disulfiNNate" "$BUILD_CONTEXT/"
 
-    docker build --platform linux/amd64 \
+    docker build --platform "$PLATFORM" \
         --build-arg BUILD_DATE="$BUILD_DATE" \
         --build-arg GIT_COMMIT="$GIT_COMMIT" \
         --build-arg GIT_BRANCH="$GIT_BRANCH" \
@@ -133,7 +144,7 @@ if [ "$BUILD_BVBRC" = true ]; then
     # Build context is parent directory (contains app_specs, service-scripts)
     cd "$(dirname "$0")/.."
 
-    docker build --platform linux/amd64 \
+    docker build --platform "$PLATFORM" \
         --build-arg BUILD_DATE="$BUILD_DATE" \
         --build-arg GIT_COMMIT="$GIT_COMMIT" \
         --build-arg GIT_BRANCH="$GIT_BRANCH" \

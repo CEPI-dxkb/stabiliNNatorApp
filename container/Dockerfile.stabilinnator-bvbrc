@@ -15,7 +15,19 @@
 #     dxkb/stabilinnator-bvbrc:latest-gpu stabilinnator proline \
 #     --pdb-path /data/input.pdb --output-path /output/output.pdb
 
-FROM --platform=linux/amd64 dxkb/stabilinnator:latest-gpu
+# Target architecture for the base layers. Defaults to amd64 -- the Docker Hub
+# images run on linux/amd64 HPC nodes and the CUDA base images are amd64-only --
+# but is overridable with `--build-arg BASE_PLATFORM=...`. Using an ARG (rather
+# than a hard-coded literal) keeps this both forced-amd64 and buildkit-clean.
+ARG BASE_PLATFORM=linux/amd64
+
+# Pin the dev_container source to the target arch so the BV-BRC runtime copied
+# below is always that build -- even when building the amd64 Docker Hub image on
+# an arm64 host. Without this, `COPY --from=<image>` resolves the source to the
+# host arch and produces a mismatched image.
+FROM --platform=${BASE_PLATFORM} dxkb/dev_container:cuda12-ubuntu22.04 AS bvbrc_runtime
+
+FROM --platform=${BASE_PLATFORM} dxkb/stabilinnator:latest-gpu
 
 # Build arguments for metadata
 ARG BUILD_DATE=unknown
@@ -46,8 +58,8 @@ LABEL build.git.branch="${GIT_BRANCH}"
 # Copy BV-BRC runtime AND build system from dev_container
 # - /opt/patric-common: Perl 5.40.2 runtime + 200 CPAN modules + p3 CLI tools
 # - /build/dev_container: BV-BRC build system for deploying app code
-COPY --from=dxkb/dev_container:cuda12-ubuntu22.04 /opt/patric-common /opt/patric-common
-COPY --from=dxkb/dev_container:cuda12-ubuntu22.04 /build/dev_container /build/dev_container
+COPY --from=bvbrc_runtime /opt/patric-common /opt/patric-common
+COPY --from=bvbrc_runtime /build/dev_container /build/dev_container
 
 # Standard BV-BRC Environment Variables
 ENV RT=/opt/patric-common/runtime
