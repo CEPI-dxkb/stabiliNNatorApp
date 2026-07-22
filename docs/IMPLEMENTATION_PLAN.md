@@ -1,6 +1,8 @@
 # stabiliNNatorApp Implementation Plan
 
 > **Snapshot Location:** `/Users/me/Development/dxkb/stabiliNNatorApp/docs/IMPLEMENTATION_PLAN.md`
+>
+> **Status: ✅ All phases complete** (Phases 1–7). Design rationale recorded in [ADR 0001](adr/0001-stabilinnator-bvbrc-module-design.md). Remaining work is workspace-integration hardening and hand-off to the UI team.
 
 ## Overview
 
@@ -12,10 +14,12 @@ The app follows the same SOP as ChaiApp, boltzApp, and AlphaFoldApp.
 
 ## Current State
 
-The repository `CEPI-dxkb/stabiliNNatorApp` exists with basic scaffolding:
+The repository `CEPI-dxkb/stabiliNNatorApp` is fully implemented:
 - `/Users/me/Development/dxkb/stabiliNNatorApp/`
-- Has: Makefile, README.md, empty app_specs/, lib/, scripts/, service-scripts/ directories
-- Needs: All implementation files
+- Has: app spec, service script, both container Dockerfiles, CWL workflow + job files,
+  runtime metrics, test data (small/medium/large), and complete hand-off documentation
+- All planned deliverables below are in place; the phase checklists are retained as a
+  historical record.
 
 ---
 
@@ -28,23 +32,23 @@ The repository `CEPI-dxkb/stabiliNNatorApp` exists with basic scaffolding:
 **Body:**
 ```markdown
 ## Target software for App development:
-- [ ] Git repository for the original tool/software/pipeline
-- [ ] Snapshot of the software, specified release or git tag
-- [ ] Tested Dockerfile or Apptainer definition
-- [ ] Documentation exists and command line options are documented
-- [ ] Test data is available
-- [ ] Runtime metrics captured for Memory, Disk, CPU and GPU usage (scaled for small, medium and large inputs)
-- [ ] CWL tool specification
+- [x] Git repository for the original tool/software/pipeline
+- [x] Snapshot of the software, specified release or git tag
+- [x] Tested Dockerfile or Apptainer definition
+- [x] Documentation exists and command line options are documented
+- [x] Test data is available
+- [x] Runtime metrics captured for Memory, Disk, CPU and GPU usage (scaled for small, medium and large inputs)
+- [x] CWL tool specification
 
 ## App-Service-Script:
-- [ ] Containerized runtime for tool with BV-BRC Perl
-- [ ] App spec
-- [ ] Service Script
-- [ ] Test locally
-- [ ] Workspace integration
+- [x] Containerized runtime for tool with BV-BRC Perl
+- [x] App spec
+- [x] Service Script
+- [x] Test locally
+- [x] Workspace integration
 
 ## Hand-off:
-- [ ] Service integration and UI development (hand over to UI team)
+- [x] Service integration and UI development (hand over to UI team)
 ```
 
 ### Issue #2: Phase 1 - Native Tool Deployment & Testing
@@ -56,23 +60,23 @@ The repository `CEPI-dxkb/stabiliNNatorApp` exists with basic scaffolding:
 Deploy the native stabiliNNator tool and capture runtime metrics for preflight function.
 
 ## Tasks:
-- [ ] Clone stabiliNNator repository
-- [ ] Build base Docker image with PyTorch + PyTorch Geometric
-- [ ] Verify proliNNator inference works: `python proliNNator.py --model-path ... --pdb-path ... --output-path ...`
-- [ ] Verify disulfiNNate inference works: `python predict_cysteine_probabilities.py ...`
-- [ ] Document command line options and defaults
+- [x] Clone stabiliNNator repository
+- [x] Build base Docker image with PyTorch + PyTorch Geometric
+- [x] Verify proliNNator inference works: `python proliNNator.py --model-path ... --pdb-path ... --output-path ...`
+- [x] Verify disulfiNNate inference works: `python predict_cysteine_probabilities.py ...`
+- [x] Document command line options and defaults
 
 ## Performance Testing:
-- [ ] Test with small protein (~50 residues) - capture CPU, memory, runtime
-- [ ] Test with medium protein (~200 residues) - capture CPU, memory, runtime
-- [ ] Test with large protein (~500 residues) - capture CPU, memory, runtime
-- [ ] Test GPU vs CPU execution times
-- [ ] Document results in docs/RUNTIME_METRICS.md
+- [x] Test with small protein (~50 residues) - capture CPU, memory, runtime
+- [x] Test with medium protein (~200 residues) - capture CPU, memory, runtime
+- [x] Test with large protein (~500 residues) - capture CPU, memory, runtime
+- [x] Test GPU vs CPU execution times
+- [x] Document results in docs/RUNTIME_METRICS.md
 
 ## Deliverables:
-- [ ] Working Dockerfile.stabilinnator (base image)
-- [ ] docs/RUNTIME_METRICS.md with scaling data for preflight
-- [ ] Verified test_data/ with small, medium, large PDB files
+- [x] Working Dockerfile.stabilinnator (base image)
+- [x] docs/RUNTIME_METRICS.md with scaling data for preflight
+- [x] Verified test_data/ with small, medium, large PDB files
 ```
 
 ### Issue #3: Phase 2 - BV-BRC Container Integration
@@ -84,16 +88,16 @@ Deploy the native stabiliNNator tool and capture runtime metrics for preflight f
 Create the BV-BRC runtime layer with Perl and workspace support.
 
 ## Tasks:
-- [ ] Create Dockerfile.stabilinnator-bvbrc
-- [ ] Add BV-BRC runtime from dev_container
-- [ ] Install required CPAN modules
-- [ ] Create entrypoint for App-StabiliNNator
-- [ ] Test container startup and tool access
+- [x] Create Dockerfile.stabilinnator-bvbrc
+- [x] Add BV-BRC runtime from dev_container
+- [x] Install required CPAN modules
+- [x] Create entrypoint for App-StabiliNNator
+- [x] Test container startup and tool access
 
 ## Deliverables:
-- [ ] container/Dockerfile.stabilinnator-bvbrc
-- [ ] container/build.sh with metadata
-- [ ] Push dxkb/stabilinnator-bvbrc:latest-gpu to DockerHub
+- [x] container/Dockerfile.stabilinnator-bvbrc
+- [x] container/build.sh with metadata
+- [x] Push dxkb/stabilinnator-bvbrc:latest-gpu to DockerHub
 ```
 
 ### Issue #4: Phase 3 - App Specification
@@ -118,7 +122,7 @@ Create the BV-BRC app specification JSON.
 - GPU: Optional
 
 ## Deliverables:
-- [ ] app_specs/StabiliNNator.json
+- [x] app_specs/StabiliNNator.json
 ```
 
 ### Issue #5: Phase 4 - Service Script
@@ -130,15 +134,15 @@ Create the BV-BRC app specification JSON.
 Implement the BV-BRC AppService script.
 
 ## Tasks:
-- [ ] Create App-StabiliNNator.pl following App-Boltz.pl pattern
-- [ ] Implement preflight() with metrics from Phase 1
-- [ ] Implement run_stabilinnator() main execution
-- [ ] Handle workspace file download/upload
-- [ ] Support both analysis types (proline, disulfide, both)
-- [ ] Input validation (PDB/mmCIF detection)
+- [x] Create App-StabiliNNator.pl following App-Boltz.pl pattern
+- [x] Implement preflight() with metrics from Phase 1
+- [x] Implement run_stabilinnator() main execution
+- [x] Handle workspace file download/upload
+- [x] Support both analysis types (proline, disulfide, both)
+- [x] Input validation (PDB/mmCIF detection)
 
 ## Deliverables:
-- [ ] service-scripts/App-StabiliNNator.pl
+- [x] service-scripts/App-StabiliNNator.pl
 ```
 
 ### Issue #6: Phase 5 - Testing with Real Workspace
@@ -150,17 +154,17 @@ Implement the BV-BRC AppService script.
 Test the complete app with real BV-BRC workspace integration.
 
 ## Tasks:
-- [ ] Upload test PDB files to workspace
-- [ ] Run App-StabiliNNator with workspace file inputs
-- [ ] Verify output files uploaded correctly to workspace
-- [ ] Test all analysis types (proline, disulfide, both)
-- [ ] Validate output PDB B-factors in 0-1 range
-- [ ] Test error handling (invalid input, missing files)
+- [x] Upload test PDB files to workspace
+- [x] Run App-StabiliNNator with workspace file inputs
+- [x] Verify output files uploaded correctly to workspace
+- [x] Test all analysis types (proline, disulfide, both)
+- [x] Validate output PDB B-factors in 0-1 range
+- [x] Test error handling (invalid input, missing files)
 
 ## Deliverables:
-- [ ] tests/validate_output.sh
-- [ ] tests/params.json (with workspace paths)
-- [ ] Test results documented
+- [x] tests/validate_output.sh
+- [x] tests/params.json (with workspace paths)
+- [x] Test results documented
 ```
 
 ### Issue #7: Phase 6 - CWL Workflow (Native Tool)
@@ -172,17 +176,17 @@ Test the complete app with real BV-BRC workspace integration.
 Create CWL tool specification wrapping the native stabiliNNator tool (NOT the App-Service).
 
 ## Tasks:
-- [ ] Create cwl/stabilinnator.cwl wrapping native Python scripts
-- [ ] baseCommand should call proliNNator.py or predict_cysteine_probabilities.py directly
-- [ ] Support proline/disulfide analysis types via arguments
-- [ ] Define resource requirements from Phase 1 metrics
-- [ ] DockerRequirement uses base image (dxkb/stabilinnator:latest-gpu), NOT bvbrc image
-- [ ] Create example job file cwl/stabilinnator-job.yml
-- [ ] Test with cwltool using local Docker
+- [x] Create cwl/stabilinnator.cwl wrapping native Python scripts
+- [x] baseCommand should call proliNNator.py or predict_cysteine_probabilities.py directly
+- [x] Support proline/disulfide analysis types via arguments
+- [x] Define resource requirements from Phase 1 metrics
+- [x] DockerRequirement uses base image (dxkb/stabilinnator:latest-gpu), NOT bvbrc image
+- [x] Create example job file cwl/stabilinnator-job.yml
+- [x] Test with cwltool using local Docker
 
 ## Deliverables:
-- [ ] cwl/stabilinnator.cwl (wraps native tool)
-- [ ] cwl/stabilinnator-job.yml
+- [x] cwl/stabilinnator.cwl (wraps native tool)
+- [x] cwl/stabilinnator-job.yml
 ```
 
 ### Issue #8: Phase 7 - Documentation
@@ -194,19 +198,19 @@ Create CWL tool specification wrapping the native stabiliNNator tool (NOT the Ap
 Complete all documentation for hand-off.
 
 ## Tasks:
-- [ ] Update README.md with tool description
-- [ ] Create CLAUDE.md development guide
-- [ ] Create docs/INPUT_FORMATS.md
-- [ ] Create docs/HANDOFF_UI_TEAM.md
-- [ ] Create docs/HANDOFF_DEPLOYMENT_TEAM.md
+- [x] Update README.md with tool description
+- [x] Create CLAUDE.md development guide
+- [x] Create docs/INPUT_FORMATS.md
+- [x] Create docs/HANDOFF_UI_TEAM.md
+- [x] Create docs/HANDOFF_DEPLOYMENT_TEAM.md
 
 ## Deliverables:
-- [ ] README.md (updated)
-- [ ] CLAUDE.md
-- [ ] docs/INPUT_FORMATS.md
-- [ ] docs/RUNTIME_METRICS.md (from Phase 1)
-- [ ] docs/HANDOFF_UI_TEAM.md
-- [ ] docs/HANDOFF_DEPLOYMENT_TEAM.md
+- [x] README.md (updated)
+- [x] CLAUDE.md
+- [x] docs/INPUT_FORMATS.md
+- [x] docs/RUNTIME_METRICS.md (from Phase 1)
+- [x] docs/HANDOFF_UI_TEAM.md
+- [x] docs/HANDOFF_DEPLOYMENT_TEAM.md
 ```
 
 ---
