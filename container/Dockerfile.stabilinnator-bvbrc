@@ -100,8 +100,13 @@ RUN mkdir -p /kb/module/service-scripts \
 COPY app_specs/ /kb/module/app_specs/
 COPY service-scripts/ /kb/module/service-scripts/
 
+# Copy the HTML report template + generator (used by App-StabiliNNator to
+# produce a self-contained report.html uploaded alongside the data outputs)
+COPY report/ /kb/module/report/
+
 # Make service scripts executable
-RUN chmod +x /kb/module/service-scripts/*.pl 2>/dev/null || true
+RUN chmod +x /kb/module/service-scripts/*.pl 2>/dev/null || true \
+    && chmod +x /kb/module/report/*.py 2>/dev/null || true
 
 # Write build info to container for runtime inspection
 RUN echo "BUILD_DATE=${BUILD_DATE}" > /kb/module/BUILD_INFO && \

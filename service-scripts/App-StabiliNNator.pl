@@ -35,6 +35,7 @@ use File::Basename;
 use File::Path qw(make_path remove_tree);
 use File::Slurp;
 use File::Copy;
+use Cwd 'abs_path';
 use JSON;
 use Getopt::Long;
 use Try::Tiny;
@@ -248,6 +249,17 @@ sub run_stabilinnator {
     my $output_path = $params->{output_path};
     die "Output path is required\n" unless $output_path;
 
+    # Generate a self-contained HTML report from the outputs. Runs after the
+    # summaries so they are listed in the report's downloads. Non-fatal: the
+    # data files must still upload if report generation fails.
+    try {
+        generate_html_report($output_dir, $input_basename, $analysis_type,
+            $local_input, $output_path, $device, ($hidden_dim // 32),
+            $prolinnator_model, $disulfinnate_model);
+    } catch {
+        warn "HTML report generation failed (continuing with data outputs): $_\n";
+    };
+
     print "Uploading results to workspace: $output_path\n";
     upload_results($app, $output_dir, $output_path);
 
@@ -373,6 +385,8 @@ sub upload_results {
                     $type = "pdb";
                 } elsif ($file =~ /\.json$/i) {
                     $type = "json";
+                } elsif ($file =~ /\.html?$/i) {
+                    $type = "html";
                 }
 
                 # Pass type and enable overwrite
@@ -575,6 +589,56 @@ sub generate_summaries {
     my $json_path = "$output_dir/${input_basename}_summary.json";
     write_file($json_path, to_json(\%summary, { pretty => 1, canonical => 1 }));
     print "Wrote summary: $json_path\n";
+}
+
+=head2 generate_html_report
+
+Produce a self-contained HTML report from the run's outputs by filling the
+report template with a JSON data blob (delegated to report/generate_report.py).
+The report is written into $output_dir alongside the data files so it is
+uploaded automatically, and links to those sibling files. Non-fatal.
+
+=cut
+
+sub generate_html_report {
+    my ($output_dir, $basename, $analysis_type, $input_file, $ws_path,
+        $device, $hidden_dim, $pro_model, $dis_model) = @_;
+
+    # Locate the report template + generator within the module. Overridable via
+    # STABILINNATOR_MODULE_DIR; otherwise derived from this script's location.
+    my $module_dir = $ENV{STABILINNATOR_MODULE_DIR}
+        // dirname(dirname(abs_path(__FILE__)));
+    my $template = "$module_dir/report/report_template.html";
+    my $script   = "$module_dir/report/generate_report.py";
+    unless (-f $template && -f $script) {
+        warn "Report template/script not found under $module_dir/report; skipping HTML report\n";
+        return;
+    }
+
+    my $report  = "$output_dir/${basename}_report.html";
+    my $pro_pdb = "$output_dir/${basename}_proline.pdb";
+    my $dis_pdb = "$output_dir/${basename}_disulfide.pdb";
+
+    my @cmd = ("python", $script,
+        "--template",       $template,
+        "--output",         $report,
+        "--input",          $input_file,
+        "--workspace-path", $ws_path,
+        "--hidden-dim",     $hidden_dim,
+        "--device",         $device,
+        "--container",      "dxkb/stabilinnator-bvbrc",
+        "--link-mode",      "relative",
+    );
+    push @cmd, "--proline",   $pro_pdb, "--proline-model",   $pro_model if -f $pro_pdb;
+    push @cmd, "--disulfide", $dis_pdb, "--disulfide-model", $dis_model if -f $dis_pdb;
+
+    print "Generating HTML report: " . join(" ", @cmd) . "\n";
+    my $rc = system(@cmd);
+    if ($rc != 0) {
+        warn "Report generator exited with code " . ($rc >> 8) . "\n";
+    } elsif (-f $report) {
+        print "Wrote report: $report\n";
+    }
 }
 
 __END__

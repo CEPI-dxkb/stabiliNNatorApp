@@ -74,6 +74,17 @@ Output files follow this pattern:
 - `{input_basename}_proline_summary.tsv` - Ranked proline substitution sites
 - `{input_basename}_disulfide_summary.tsv` - Ranked cysteine (disulfide) sites
 - `{input_basename}_summary.json` - Combined structured summary (for the UI)
+- `{input_basename}_report.html` - **Self-contained HTML report** (workspace type `html`)
+
+### HTML report (rendered in the portal)
+Every run also produces a single self-contained `*_report.html` uploaded with
+workspace type `html`, so the BV-BRC portal can render it directly. It describes
+the input structure, the models run (with commands), a ranked summary, per-residue
+visualizations (sequence stability track, ranked bars, geometrically-detected
+disulfide bonds), and a downloads section linking to the sibling data files. The
+UI can surface this as the primary "view results" target. It is generated from a
+template (`report/report_template.html`) — restyle there without touching the
+service logic.
 
 ### Annotated PDBs (B-factor encoding)
 The `*_proline.pdb` / `*_disulfide.pdb` files carry the per-residue probability

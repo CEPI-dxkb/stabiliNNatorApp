@@ -1,0 +1,448 @@
+<title>stabiliNNator stability report</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+:root{
+  color-scheme: light dark;
+  --paper:#FAFAF7; --surface:#FFFFFF; --sunken:#F2F3EE;
+  --ink:#1B2426; --body:#374043; --muted:#6A7476; --faint:#98A0A1;
+  --line:#E5E5DD; --line-strong:#D3D5CC;
+  --proline:#0797A8; --proline-soft:#0797A81a;
+  --sulfur:#B0760C; --sulfur-soft:#B0760C1a;
+  --seq-base:#F4F4EE; --seq-hi-text:#F7FDFE;
+  --shadow:0 1px 2px rgba(20,30,32,.04), 0 8px 28px -18px rgba(20,30,32,.22);
+  --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
+  --mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --paper:#14181A; --surface:#1B2023; --sunken:#22282B;
+    --ink:#E9EEEE; --body:#C3CCCD; --muted:#93A0A2; --faint:#6C787A;
+    --line:#29302F; --line-strong:#38403F;
+    --proline:#26A7B3; --proline-soft:#26A7B322;
+    --sulfur:#B58824; --sulfur-soft:#B5882422;
+    --seq-base:#1E2426; --seq-hi-text:#0B1113;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px -20px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="light"]{
+  color-scheme: light;
+  --paper:#FAFAF7; --surface:#FFFFFF; --sunken:#F2F3EE;
+  --ink:#1B2426; --body:#374043; --muted:#6A7476; --faint:#98A0A1;
+  --line:#E5E5DD; --line-strong:#D3D5CC;
+  --proline:#0797A8; --proline-soft:#0797A81a;
+  --sulfur:#B0760C; --sulfur-soft:#B0760C1a;
+  --seq-base:#F4F4EE; --seq-hi-text:#F7FDFE;
+}
+:root[data-theme="dark"]{
+  color-scheme: dark;
+  --paper:#14181A; --surface:#1B2023; --sunken:#22282B;
+  --ink:#E9EEEE; --body:#C3CCCD; --muted:#93A0A2; --faint:#6C787A;
+  --line:#29302F; --line-strong:#38403F;
+  --proline:#26A7B3; --proline-soft:#26A7B322;
+  --sulfur:#B58824; --sulfur-soft:#B5882422;
+  --seq-base:#1E2426; --seq-hi-text:#0B1113;
+}
+*{box-sizing:border-box}
+body{margin:0; background:var(--paper); color:var(--body);
+  font-family:var(--serif); font-size:17px; line-height:1.65;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility}
+.wrap{max-width:940px; margin:0 auto; padding:clamp(20px,4vw,56px) clamp(18px,4vw,40px) 80px}
+.eyebrow{font-family:var(--sans); font-size:12px; font-weight:600; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--muted)}
+h1,h2,h3{color:var(--ink); text-wrap:balance; line-height:1.15; font-weight:600}
+a{color:var(--proline); text-underline-offset:2px}
+code,.mono{font-family:var(--mono)}
+.masthead{border-bottom:1px solid var(--line-strong); padding-bottom:28px; margin-bottom:8px}
+.masthead h1{font-size:clamp(28px,5vw,44px); margin:.34em 0 .28em; letter-spacing:-.01em}
+.masthead .lede{font-size:19px; color:var(--body); max-width:62ch; margin:0}
+.runbar{display:flex; flex-wrap:wrap; gap:8px 10px; margin-top:22px; font-family:var(--mono); font-size:12.5px}
+.chip{display:inline-flex; align-items:center; gap:7px; padding:5px 11px; border:1px solid var(--line-strong);
+  border-radius:999px; color:var(--body); background:var(--surface)}
+.chip b{color:var(--ink); font-weight:600}
+.dot{width:8px; height:8px; border-radius:50%; flex:none}
+.dot.pro{background:var(--proline)} .dot.sul{background:var(--sulfur)}
+section{margin-top:52px}
+.sec-head{display:flex; align-items:baseline; gap:14px; margin-bottom:20px}
+.sec-num{font-family:var(--mono); font-size:13px; color:var(--proline); font-weight:600}
+.sec-head h2{font-size:24px; margin:0}
+.sec-head .sub{font-family:var(--sans); font-size:12.5px; color:var(--muted); margin-left:auto; letter-spacing:.02em}
+p{max-width:68ch} p.tight{margin:.4em 0}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:24px 26px; box-shadow:var(--shadow)}
+.grid2{display:grid; grid-template-columns:1fr 1fr; gap:18px}
+@media(max-width:680px){.grid2{grid-template-columns:1fr}}
+.dl{display:grid; grid-template-columns:auto 1fr; gap:9px 20px; margin:0; font-size:15px}
+.dl dt{font-family:var(--sans); font-size:11.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); align-self:center}
+.dl dd{margin:0; color:var(--ink); font-family:var(--mono); font-size:13.5px}
+.seqbox{margin-top:14px; overflow-x:auto}
+.seqline{font-family:var(--mono); font-size:14px; letter-spacing:.5px; color:var(--body); white-space:pre; line-height:1.5}
+.seqline .cys{color:var(--sulfur); font-weight:700}
+.tiles{display:grid; grid-template-columns:repeat(4,1fr); gap:14px}
+@media(max-width:760px){.tiles{grid-template-columns:repeat(2,1fr)}}
+.tile{background:var(--surface); border:1px solid var(--line); border-radius:13px; padding:18px 18px 16px; box-shadow:var(--shadow); position:relative; overflow:hidden}
+.tile .k{font-family:var(--sans); font-size:11px; letter-spacing:.07em; text-transform:uppercase; color:var(--muted)}
+.tile .v{font-family:var(--mono); font-size:30px; color:var(--ink); font-weight:600; line-height:1.05; margin-top:9px; letter-spacing:-.01em}
+.tile .v small{font-size:15px; color:var(--muted); font-weight:500}
+.tile .cap{font-size:13.5px; color:var(--body); margin-top:6px}
+.tile .rail{position:absolute; left:0; top:0; bottom:0; width:3px}
+.tile.pro .rail{background:var(--proline)} .tile.sul .rail{background:var(--sulfur)}
+.run{background:var(--sunken); border:1px solid var(--line); border-radius:11px; padding:16px 18px; font-family:var(--mono); font-size:12.5px; line-height:1.7; color:var(--body); overflow-x:auto; margin-top:14px; white-space:pre}
+figure{margin:0}
+.figcap{font-family:var(--sans); font-size:12.5px; color:var(--muted); margin-top:12px}
+.figcap b{color:var(--body); font-weight:600}
+.legend{display:flex; flex-wrap:wrap; gap:16px; font-family:var(--sans); font-size:12.5px; color:var(--body); margin-bottom:6px}
+.legend span{display:inline-flex; align-items:center; gap:7px}
+.swatch{width:12px; height:12px; border-radius:3px; flex:none}
+.track-scroll{overflow-x:auto; padding:6px 2px 2px}
+.arc{fill:none; stroke:var(--sulfur); stroke-width:1.6; opacity:.85}
+.arc-lab{font-family:var(--mono); font-size:9px; fill:var(--sulfur)}
+.axis-lab{font-family:var(--mono); font-size:9px; fill:var(--faint)}
+.hcell text{font-family:var(--mono); pointer-events:none}
+.bars{display:flex; flex-direction:column; gap:7px; margin-top:4px}
+.bar-row{display:grid; grid-template-columns:120px 1fr; align-items:center; gap:12px}
+.bar-lab{font-family:var(--mono); font-size:12.5px; color:var(--body); text-align:right; white-space:nowrap}
+.bar-lab b{color:var(--ink); font-weight:600}
+.bar-track{position:relative; height:22px; background:var(--sunken); border-radius:5px}
+.bar-fill{position:absolute; left:0; top:0; bottom:0; border-radius:5px 4px 4px 5px; min-width:3px}
+.bar-fill.pro{background:var(--proline)} .bar-fill.sul{background:var(--sulfur)}
+.bar-val{position:absolute; font-family:var(--mono); font-size:11.5px; font-weight:600; top:50%; transform:translateY(-50%)}
+.bar-val.in{right:7px; color:#fff} .bar-val.out{left:calc(100% + 7px); color:var(--body)}
+.tag{font-family:var(--sans); font-size:10px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--sulfur); border:1px solid var(--sulfur); border-radius:4px; padding:1px 5px; margin-left:8px; vertical-align:1px}
+#tip{position:fixed; z-index:50; pointer-events:none; opacity:0; transition:opacity .1s; background:var(--ink); color:var(--paper); font-family:var(--mono); font-size:12px; line-height:1.5; padding:8px 11px; border-radius:8px; box-shadow:0 6px 24px -8px rgba(0,0,0,.5); max-width:240px}
+#tip b{color:var(--paper)}
+.dl-files{display:flex; flex-direction:column; gap:0}
+.dl-file{display:grid; grid-template-columns:1fr auto; align-items:center; gap:10px 16px; padding:12px 0; border-bottom:1px solid var(--line)}
+.dl-file:last-child{border-bottom:none}
+.dl-file .fn{font-family:var(--mono); font-size:13.5px; color:var(--ink)}
+.dl-file .fk{font-family:var(--sans); font-size:11.5px; color:var(--muted); margin-top:2px}
+.dl-file .fsz{font-family:var(--mono); font-size:12px; color:var(--faint); font-variant-numeric:tabular-nums}
+.dl-file a.open{font-family:var(--sans); font-size:12.5px; font-weight:600; color:var(--proline); text-decoration:none; border:1px solid var(--line-strong); border-radius:7px; padding:5px 12px; white-space:nowrap}
+.dl-file a.open:hover{border-color:var(--proline)}
+.ws-note{font-family:var(--mono); font-size:12px; color:var(--muted); margin-top:14px; word-break:break-all}
+details.tblwrap{margin-top:18px}
+details.tblwrap summary{font-family:var(--sans); font-size:13px; color:var(--proline); cursor:pointer}
+table{border-collapse:collapse; width:100%; margin-top:14px; font-family:var(--mono); font-size:12.5px}
+th,td{text-align:left; padding:6px 10px; border-bottom:1px solid var(--line)}
+th{font-family:var(--sans); font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); font-weight:600}
+td.num{text-align:right; font-variant-numeric:tabular-nums}
+.note{border-left:3px solid var(--proline); background:var(--proline-soft); border-radius:0 10px 10px 0; padding:14px 18px; margin-top:18px; font-size:15px; color:var(--body)}
+.note.sul{border-left-color:var(--sulfur); background:var(--sulfur-soft)}
+.note b{color:var(--ink)}
+footer{margin-top:60px; padding-top:24px; border-top:1px solid var(--line-strong); font-family:var(--sans); font-size:12.5px; color:var(--muted); line-height:1.7}
+footer code{color:var(--sulfur); font-family:var(--mono)}
+:focus-visible{outline:2px solid var(--proline); outline-offset:2px; border-radius:3px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.hidden{display:none!important}
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="eyebrow">stabiliNNator · protein stability report</div>
+    <h1 id="m-title">Protein stability prediction</h1>
+    <p class="lede" id="m-lede"></p>
+    <div class="runbar" id="m-runbar"></div>
+  </header>
+
+  <section id="s-input">
+    <div class="sec-head"><span class="sec-num">01</span><h2>The input structure</h2><span class="sub">what went in</span></div>
+    <p id="in-desc"></p>
+    <div class="grid2" style="margin-top:18px">
+      <div class="card"><dl class="dl" id="in-dl"></dl></div>
+      <div class="card">
+        <div class="eyebrow" style="color:var(--faint)" id="in-title-lab">PDB title record</div>
+        <p id="in-title" style="font-size:14.5px; margin:.5em 0 0; color:var(--body); font-style:italic"></p>
+        <div class="seqbox">
+          <div class="eyebrow" style="color:var(--faint); margin-bottom:6px">Sequence · cysteines in gold</div>
+          <div class="seqline" id="in-seq"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="s-method">
+    <div class="sec-head"><span class="sec-num">02</span><h2>What we ran</h2><span class="sub">the method</span></div>
+    <p><b>stabiliNNator</b> represents a protein as a graph of residues and predicts, per position, a
+      stability-engineering probability (0–1), written into the <span class="mono">B-factor</span> column of an output
+      PDB — one value per residue, on every atom.</p>
+    <div class="grid2" id="method-cards" style="margin-top:16px"></div>
+    <p id="method-foot" style="margin-top:16px; font-size:14.5px; color:var(--muted)"></p>
+  </section>
+
+  <section id="s-summary">
+    <div class="sec-head"><span class="sec-num">03</span><h2>Results at a glance</h2><span class="sub">the summary</span></div>
+    <div class="tiles" id="tiles"></div>
+    <div id="callouts"></div>
+  </section>
+
+  <section id="s-viz">
+    <div class="sec-head"><span class="sec-num">04</span><h2>Visualization</h2><span class="sub">per-residue, along the chain</span></div>
+    <figure class="card">
+      <div class="legend" id="track-legend"></div>
+      <div class="track-scroll"><svg id="track" xmlns="http://www.w3.org/2000/svg"></svg></div>
+      <figcaption class="figcap" id="track-cap"></figcaption>
+    </figure>
+    <div class="grid2" id="bar-cards" style="margin-top:18px; align-items:start"></div>
+    <details class="tblwrap">
+      <summary>View full per-residue data table</summary>
+      <div style="overflow-x:auto"><table id="dataTable"><thead></thead><tbody></tbody></table></div>
+    </details>
+  </section>
+
+  <section id="s-downloads">
+    <div class="sec-head"><span class="sec-num">05</span><h2>Output data</h2><span class="sub">files in this job folder</span></div>
+    <div class="card">
+      <div class="dl-files" id="dl-files"></div>
+      <div class="ws-note" id="ws-note"></div>
+    </div>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+<div id="tip"></div>
+
+<script id="report-data" type="application/json">{{REPORT_DATA_JSON}}</script>
+<script>
+const DATA = JSON.parse(document.getElementById('report-data').textContent);
+const SVGNS="http://www.w3.org/2000/svg";
+const el=(t,a={})=>{const e=document.createElementNS(SVGNS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const AA3={A:"ALA",R:"ARG",N:"ASN",D:"ASP",C:"CYS",Q:"GLN",E:"GLU",G:"GLY",H:"HIS",I:"ILE",L:"LEU",K:"LYS",M:"MET",F:"PHE",P:"PRO",S:"SER",T:"THR",W:"TRP",Y:"TYR",V:"VAL"};
+const analysis=k=>DATA.analyses.find(a=>a.key===k);
+const hasPro=!!analysis('proline'), hasDis=!!analysis('disulfide');
+const perByPos={}; DATA.per_residue.forEach(r=>perByPos[r.chain+'/'+r.pos]=r);
+
+/* tooltip */
+const tip=document.getElementById('tip');
+const showTip=(h,x,y)=>{tip.innerHTML=h;tip.style.opacity=1;moveTip(x,y);};
+const moveTip=(x,y)=>{const r=tip.getBoundingClientRect();let nx=x+14,ny=y+14;
+  if(nx+r.width>innerWidth-8)nx=x-r.width-14; if(ny+r.height>innerHeight-8)ny=y-r.height-14;
+  tip.style.left=nx+'px';tip.style.top=ny+'px';};
+const hideTip=()=>tip.style.opacity=0;
+
+/* masthead */
+(()=>{
+  const nm=DATA.input.name;
+  const which = hasPro&&hasDis ? "proline &amp; disulfide site prediction"
+              : hasPro ? "proline substitution site prediction" : "disulfide bond site prediction";
+  document.getElementById('m-title').innerHTML=`Stabilizing ${esc(nm)}: ${which}`;
+  const goals=[]; if(hasPro)goals.push("favorable proline substitutions"); if(hasDis)goals.push("disulfide-forming cysteines");
+  document.getElementById('m-lede').textContent=
+    `A graph neural network scored every residue of ${nm} for ${goals.join(" and ")}. This is the annotated result.`;
+  const rb=document.getElementById('m-runbar'); const chips=[];
+  DATA.analyses.forEach(a=>chips.push(`<span class="chip"><span class="dot ${a.key==='proline'?'pro':'sul'}"></span>${esc(a.label)}</span>`));
+  chips.push(`<span class="chip">input <b>${esc(DATA.input.file)}</b></span>`);
+  if(DATA.params.device)chips.push(`<span class="chip">device <b>${esc(DATA.params.device)}</b></span>`);
+  if(DATA.params.hidden_dim)chips.push(`<span class="chip">hidden-dim <b>${esc(DATA.params.hidden_dim)}</b></span>`);
+  chips.push(`<span class="chip">via <b>${esc(DATA.params.service||'BV-BRC')}</b></span>`);
+  rb.innerHTML=chips.join('');
+})();
+
+/* input */
+(()=>{
+  const i=DATA.input;
+  document.getElementById('in-desc').textContent=
+    `The job analyzed ${i.name} — ${i.n_residues} residues across ${i.chains.length} chain`+
+    `${i.chains.length>1?'s':''} (${i.chains.join(', ')}), including ${i.cys_positions.length} cysteine`+
+    `${i.cys_positions.length===1?'':'s'}.`;
+  const dl=document.getElementById('in-dl'); const rows=[
+    ['Structure', i.header? `${i.name} — ${i.header}` : i.name],
+    ['File', i.file],
+    ['Chains', i.chains.join(', ')||'—'],
+    ['Residues', String(i.n_residues)],
+    ['Cysteines', i.cys_positions.length? `${i.cys_positions.length} · pos ${i.cys_positions.join(', ')}` : '0'],
+  ];
+  dl.innerHTML=rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
+  if(i.title){document.getElementById('in-title').textContent=`“${i.title}”`;}
+  else{document.getElementById('in-title-lab').classList.add('hidden');document.getElementById('in-title').classList.add('hidden');}
+  const cys=new Set(i.cys_positions); let html='';
+  for(let k=0;k<i.sequence.length;k++){const pos=k+1;
+    html+=cys.has(pos)?`<span class="cys">${i.sequence[k]}</span>`:i.sequence[k];
+    if(pos%10===0)html+=' ';}
+  document.getElementById('in-seq').innerHTML=html;
+})();
+
+/* method */
+(()=>{
+  const wrap=document.getElementById('method-cards');
+  wrap.innerHTML=DATA.analyses.map(a=>`
+    <div class="card">
+      <div class="eyebrow"><span class="dot ${a.key==='proline'?'pro':'sul'}" style="display:inline-block;margin-right:6px"></span>${esc(a.label)}</div>
+      <p class="tight" style="font-size:14.5px">${esc(a.blurb)}</p>
+      <div class="run">${esc(a.command)}</div>
+    </div>`).join('');
+  if(DATA.analyses.length===1)wrap.style.gridTemplateColumns='1fr';
+  document.getElementById('method-foot').textContent=
+    `Both models ran inside the BV-BRC AppService container ${DATA.params.container}, reading the input from and `+
+    `uploading results to the BV-BRC workspace. Compute was ${DATA.params.device} — for these small GNNs it is `+
+    `faster than GPU once initialization overhead is counted.`;
+})();
+
+/* summary tiles + callouts */
+(()=>{
+  const tiles=document.getElementById('tiles'); const T=[];
+  if(hasPro){
+    const s=analysis('proline').sites;
+    const cand=s.find(x=>!x.already_pro)||s[0];
+    const nPro=s.filter(x=>x.already_pro).length;
+    T.push(`<div class="tile pro"><span class="rail"></span><div class="k">Top proline site</div>
+      <div class="v">${cand.prob.toFixed(2)}</div><div class="cap">${esc(AA3[DATA.input.sequence[cand.pos-1]]||cand.res)} ${cand.pos} — strongest substitution candidate</div></div>`);
+    T.push(`<div class="tile pro"><span class="rail"></span><div class="k">Proline sites scored</div>
+      <div class="v">${s.length}</div><div class="cap">every residue ranked; ${nPro} already proline</div></div>`);
+  }
+  if(hasDis){
+    const s=analysis('disulfide').sites;
+    const nHigh=s.filter(x=>x.prob>=0.9).length;
+    T.push(`<div class="tile sul"><span class="rail"></span><div class="k">Cysteines flagged</div>
+      <div class="v">${s.length}<small> total</small></div><div class="cap">${nHigh} score ≥ 0.90 for disulfide formation</div></div>`);
+    T.push(`<div class="tile sul"><span class="rail"></span><div class="k">Disulfide bonds detected</div>
+      <div class="v">${DATA.disulfide_bonds.length}</div><div class="cap">from the structure by S–S distance (≤ 2.5 Å)</div></div>`);
+  }
+  tiles.innerHTML=T.join('');
+  if(T.length===2)tiles.style.gridTemplateColumns='repeat(2,1fr)';
+
+  const co=document.getElementById('callouts'); let html='';
+  if(hasDis){
+    const s=analysis('disulfide').sites, bonds=DATA.disulfide_bonds;
+    const minP=s.length?Math.min(...s.map(x=>x.prob)):0;
+    const pairs=bonds.map(b=>`Cys${b.a}–Cys${b.b}`).join(', ');
+    html+=`<div class="note sul"><b>Disulfide topology.</b> ${bonds.length} disulfide bond`+
+      `${bonds.length===1?'':'s'} detected in the input structure by cysteine S–S distance`+
+      `${pairs?` — ${pairs}`:''}. All ${s.length} cysteines score ≥ ${minP.toFixed(2)} for disulfide participation.</div>`;
+  }
+  if(hasPro){
+    const s=analysis('proline').sites;
+    const cand=s.find(x=>!x.already_pro)||s[0];
+    const nPro=s.filter(x=>x.already_pro).length;
+    html+=`<div class="note"><b>Reading the proline scores.</b> The leading substitution candidate is `+
+      `<b>${esc(AA3[DATA.input.sequence[cand.pos-1]]||cand.res)}${cand.pos} (${cand.prob.toFixed(2)})</b>. `+
+      `${nPro} ranked residue${nPro===1?' is':'s are'} already proline — the model recognizes its own favored motif; `+
+      `these are flagged, not substitution targets.</div>`;
+  }
+  co.innerHTML=html;
+})();
+
+/* sequence heat track */
+(()=>{
+  const svg=document.getElementById('track'), res=DATA.per_residue, n=res.length;
+  const cw=26,ch=30,padL=8,padR=8,topArc=DATA.disulfide_bonds.length?52:14,labelH=16;
+  const W=padL+padR+n*cw, H=topArc+ch+labelH+6;
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`); svg.setAttribute('width',W); svg.setAttribute('height',H);
+  svg.style.minWidth=Math.min(W,680)+'px';
+  const idx={}; res.forEach((r,k)=>idx[r.pos]=k);
+  const cx=pos=>padL+(idx[pos]+0.5)*cw;
+  DATA.disulfide_bonds.forEach(b=>{
+    if(idx[b.a]==null||idx[b.b]==null)return;
+    let x1=cx(b.a),x2=cx(b.b); if(x1>x2)[x1,x2]=[x2,x1];
+    const r=(x2-x1)/2, mx=(x1+x2)/2, ry=Math.min(r*0.62,34);
+    svg.appendChild(el('path',{class:'arc',d:`M ${x1} ${topArc} A ${r} ${ry} 0 0 1 ${x2} ${topArc}`}));
+    [x1,x2].forEach(xx=>svg.appendChild(el('circle',{cx:xx,cy:topArc,r:2.4,fill:'var(--sulfur)'})));
+    const lab=el('text',{class:'arc-lab',x:mx,y:topArc-ry-4,'text-anchor':'middle'});
+    lab.textContent=`${b.a}–${b.b}`; svg.appendChild(lab);
+  });
+  res.forEach((r,k)=>{
+    const pr=r.proline_p==null?0:r.proline_p, x=padL+k*cw+2, y=topArc, w=cw-4, h=ch-4;
+    const g=el('g',{class:'hcell',tabindex:0,role:'img'});
+    g.appendChild(el('rect',{x,y,width:w,height:h,rx:4,
+      fill:`color-mix(in oklab, var(--proline) ${Math.round(pr*100)}%, var(--seq-base))`,
+      stroke:r.is_cys?'var(--sulfur)':'var(--line-strong)','stroke-width':r.is_cys?2:1}));
+    const t=el('text',{x:x+w/2,y:y+h/2+4,'text-anchor':'middle','font-size':13,'font-weight':r.is_cys?700:500,
+      fill:r.is_cys?'var(--sulfur)':(pr>0.5?'var(--seq-hi-text)':'var(--body)')});
+    t.textContent=r.one; g.appendChild(t);
+    if(r.pos%5===0){const tk=el('text',{class:'axis-lab',x:x+w/2,y:topArc+ch+10,'text-anchor':'middle'});tk.textContent=r.pos;svg.appendChild(tk);}
+    const parts=[`<b>${r.res} ${r.pos}</b>${r.is_cys?' · Cys':''}`];
+    if(r.proline_p!=null)parts.push(`proline p = ${r.proline_p.toFixed(2)}`);
+    if(r.disulfide_p!=null)parts.push(`disulfide p = ${r.disulfide_p.toFixed(2)}`);
+    const html=parts.join('<br>');
+    g.addEventListener('mousemove',e=>showTip(html,e.clientX,e.clientY));
+    g.addEventListener('mouseleave',hideTip);
+    g.addEventListener('focus',()=>{const b=g.getBoundingClientRect();showTip(html,b.right,b.top);});
+    g.addEventListener('blur',hideTip);
+    svg.appendChild(g);
+  });
+  const lg=document.getElementById('track-legend'); const L=[];
+  if(hasPro)L.push(`<span><span class="swatch" style="background:var(--proline)"></span>proline substitution probability (cell shade)</span>`);
+  if(DATA.input.cys_positions.length)L.push(`<span><span class="swatch" style="background:var(--sulfur)"></span>cysteine${DATA.disulfide_bonds.length?' · disulfide bond':''}</span>`);
+  lg.innerHTML=L.join('');
+  document.getElementById('track-cap').innerHTML=
+    `<b>Sequence stability track.</b> Each cell is one residue`+
+    (hasPro?`, shaded by its proline score (deeper teal = higher)`:``)+
+    `. Cysteines are outlined in gold`+
+    (DATA.disulfide_bonds.length?`; arcs trace disulfide bonds detected in the structure`:``)+
+    `. Hover any residue for its exact scores.`;
+})();
+
+/* bar charts */
+function renderBars(mount, rows, cls, kind){
+  rows.forEach(r=>{
+    const row=document.createElement('div'); row.className='bar-row';
+    const isPro=r.res==='PRO';
+    const lab=document.createElement('div'); lab.className='bar-lab';
+    lab.innerHTML=`<b>${esc(AA3[DATA.input.sequence[r.pos-1]]||r.res)} ${r.pos}</b>`;
+    if(kind==='pro'&&isPro){const tg=document.createElement('span');tg.className='tag';tg.textContent='already PRO';lab.appendChild(tg);}
+    row.appendChild(lab);
+    const track=document.createElement('div'); track.className='bar-track';
+    const fill=document.createElement('div'); fill.className='bar-fill '+cls; fill.style.width=Math.max(r.prob*100,1.5)+'%';
+    const inside=r.prob>=0.30;
+    const val=document.createElement('span'); val.className='bar-val '+(inside?'in':'out'); val.textContent=r.prob.toFixed(2);
+    (inside?fill:track).appendChild(val);
+    track.appendChild(fill); row.appendChild(track);
+    const html=`<b>${esc(AA3[DATA.input.sequence[r.pos-1]]||r.res)} ${r.pos}</b><br>${kind==='pro'?'proline':'disulfide'} p = ${r.prob.toFixed(2)}`+(isPro&&kind==='pro'?'<br><i>already proline</i>':'');
+    row.addEventListener('mousemove',e=>showTip(html,e.clientX,e.clientY));
+    row.addEventListener('mouseleave',hideTip);
+    mount.appendChild(row);
+  });
+}
+(()=>{
+  const wrap=document.getElementById('bar-cards'); const cards=[];
+  if(hasPro){const c=document.createElement('figure');c.className='card';
+    c.innerHTML=`<h3 style="font-size:16px;margin:0 0 4px">Top proline candidates</h3>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 16px;font-family:var(--sans)">ranked by score · top ${Math.min(12,analysis('proline').sites.length)} of ${analysis('proline').sites.length}</p>
+      <div class="bars"></div>`;
+    renderBars(c.querySelector('.bars'),analysis('proline').sites.slice(0,12),'pro','pro'); cards.push(c);}
+  if(hasDis){const c=document.createElement('figure');c.className='card';
+    c.innerHTML=`<h3 style="font-size:16px;margin:0 0 4px">Cysteine disulfide propensity</h3>
+      <p style="font-size:13px;color:var(--muted);margin:0 0 16px;font-family:var(--sans)">all ${analysis('disulfide').sites.length} cysteines</p>
+      <div class="bars"></div>`;
+    renderBars(c.querySelector('.bars'),analysis('disulfide').sites,'sul','sul'); cards.push(c);}
+  cards.forEach(c=>wrap.appendChild(c));
+  if(cards.length===1)wrap.style.gridTemplateColumns='1fr';
+})();
+
+/* data table */
+(()=>{
+  const thead=document.querySelector('#dataTable thead'), tb=document.querySelector('#dataTable tbody');
+  const cols=['Pos','Residue']; if(hasPro)cols.push('Proline p'); if(hasDis)cols.push('Disulfide p'); cols.push('Note');
+  thead.innerHTML='<tr>'+cols.map((c,k)=>`<th${k>1&&k<cols.length-1?' class="num"':''}>${esc(c)}</th>`).join('')+'</tr>';
+  DATA.per_residue.forEach(r=>{
+    const note=r.res==='PRO'?'already PRO':(r.is_cys?'cysteine':'');
+    let tds=`<td>${r.pos}</td><td>${esc(r.res)}</td>`;
+    if(hasPro)tds+=`<td class="num">${r.proline_p==null?'—':r.proline_p.toFixed(2)}</td>`;
+    if(hasDis)tds+=`<td class="num">${r.disulfide_p==null?'—':r.disulfide_p.toFixed(2)}</td>`;
+    tds+=`<td style="font-family:var(--sans);color:var(--muted)">${esc(note)}</td>`;
+    const tr=document.createElement('tr'); tr.innerHTML=tds; tb.appendChild(tr);
+  });
+})();
+
+/* downloads */
+(()=>{
+  const wrap=document.getElementById('dl-files'), fmt=b=>b<1024?b+' B':b<1048576?(b/1024).toFixed(1)+' KB':(b/1048576).toFixed(1)+' MB';
+  wrap.innerHTML=DATA.outputs.map(o=>`
+    <div class="dl-file">
+      <div><div class="fn">${esc(o.name)}</div><div class="fk">${esc(o.kind)} · <span class="fsz">${fmt(o.bytes)}</span></div></div>
+      ${o.href?`<a class="open" href="${esc(o.href)}"${o.href.startsWith('.')?'':' target="_blank" rel="noopener"'}>Open</a>`:''}
+    </div>`).join('');
+  document.getElementById('ws-note').textContent=DATA.workspace_path?`Workspace folder: ${DATA.workspace_path}`:'';
+})();
+
+/* footer */
+(()=>{
+  const names=DATA.outputs.map(o=>o.name).join(' · ');
+  document.getElementById('foot').innerHTML=
+    `<div style="color:var(--ink);font-family:var(--serif);font-size:15px;margin-bottom:10px">Provenance</div>
+     <div style="font-family:var(--mono);color:var(--body)">${esc(names)}</div>
+     <p style="max-width:72ch;margin:14px 0 0">Per-residue probabilities are stabiliNNator GNN scores encoded in the PDB
+     B-factor column (0–1). The disulfide model returns a per-cysteine propensity, not explicit pairings — the bonds shown
+     are detected from the input structure by cysteine S–S distance (≤ 2.5 Å). Generated ${esc(DATA.generated)} by the
+     BV-BRC <code>App-StabiliNNator</code> service.</p>`;
+})();
+</script>
