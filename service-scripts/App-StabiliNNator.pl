@@ -235,6 +235,15 @@ sub run_stabilinnator {
     print "\nstabiliNNator prediction completed successfully\n";
     print "Output files: " . scalar(@output_files) . "\n";
 
+    # Generate user-friendly ranked summaries (TSV per analysis + combined JSON)
+    # from the annotated PDBs. Non-fatal: the annotated PDBs are the primary
+    # deliverable and must still upload even if summarization fails.
+    try {
+        generate_summaries(\@output_files, $output_dir, $input_basename, $analysis_type);
+    } catch {
+        warn "Summary generation failed (continuing with PDB outputs): $_\n";
+    };
+
     # Upload results to workspace
     my $output_path = $params->{output_path};
     die "Output path is required\n" unless $output_path;
@@ -395,6 +404,177 @@ sub find_files {
         }
     }
     closedir($dh);
+}
+
+=head2 parse_pdb_residue_scores
+
+Parse an annotated PDB and return one probability per residue.
+
+stabiliNNator writes the per-residue probability (0-1) into the B-factor column
+of every atom of a standard amino-acid residue; all atoms of a residue share the
+same value. We read the CA atom of each residue as the single representative.
+HETATM and non-standard records are ignored (their B-factors are not meaningful
+here). Returns an arrayref of hashes: { chain, pos, icode, resname, prob }.
+
+=cut
+
+sub parse_pdb_residue_scores {
+    my ($pdb_file) = @_;
+
+    my @rows;
+    my $content = read_file($pdb_file);
+    for my $line (split /\n/, $content) {
+        next unless $line =~ /^ATOM/;              # ATOM records only, skip HETATM
+        my $atom = _trim(substr($line, 12, 4));
+        next unless $atom eq 'CA';                 # one representative per residue
+
+        my $resname = _trim(substr($line, 17, 3));
+        my $chain   = _trim(substr($line, 21, 1));
+        my $resseq  = _trim(substr($line, 22, 4));
+        my $icode   = _trim(substr($line, 26, 1));
+        my $bfactor = _trim(substr($line, 60, 6));
+
+        next unless length $bfactor && $bfactor =~ /^-?\d+(?:\.\d+)?$/;
+
+        push @rows, {
+            chain   => ($chain ne '' ? $chain : '-'),
+            pos     => $resseq,
+            icode   => $icode,
+            resname => $resname,
+            prob    => $bfactor + 0,
+        };
+    }
+
+    return \@rows;
+}
+
+sub _trim {
+    my ($s) = @_;
+    return '' unless defined $s;
+    $s =~ s/^\s+//;
+    $s =~ s/\s+$//;
+    return $s;
+}
+
+=head2 rank_sites
+
+Given parsed residue rows and an analysis type, return the rows sorted by
+probability descending, filtered as appropriate for the analysis:
+
+  * proline  - all standard residues (existing PRO kept, flagged by caller)
+  * disulfide - only CYS/CYX residues (the model annotates every residue, but
+    only cysteines are biologically meaningful for disulfide formation)
+
+=cut
+
+sub rank_sites {
+    my ($rows, $analysis) = @_;
+
+    my @filtered = @$rows;
+    if ($analysis eq 'disulfide') {
+        @filtered = grep { $_->{resname} =~ /^(?:CYS|CYX)$/ } @filtered;
+    }
+
+    return [ sort { $b->{prob} <=> $a->{prob} } @filtered ];
+}
+
+=head2 write_summary_tsv
+
+Write a ranked, human-readable TSV for one analysis.
+
+=cut
+
+sub write_summary_tsv {
+    my ($ranked, $out_path, $analysis) = @_;
+
+    my @lines;
+    if ($analysis eq 'proline') {
+        push @lines, join("\t", qw(rank chain pos residue probability note));
+    } else {
+        push @lines, join("\t", qw(rank chain pos residue probability));
+    }
+
+    my $rank = 0;
+    for my $r (@$ranked) {
+        $rank++;
+        my $pos = $r->{pos} . ($r->{icode} ne '' ? $r->{icode} : '');
+        my $prob = sprintf("%.2f", $r->{prob});
+        if ($analysis eq 'proline') {
+            my $note = ($r->{resname} eq 'PRO') ? 'already PRO' : '';
+            push @lines, join("\t", $rank, $r->{chain}, $pos, $r->{resname}, $prob, $note);
+        } else {
+            push @lines, join("\t", $rank, $r->{chain}, $pos, $r->{resname}, $prob);
+        }
+    }
+
+    write_file($out_path, join("\n", @lines) . "\n");
+    print "Wrote summary: $out_path (" . scalar(@$ranked) . " sites)\n";
+}
+
+=head2 sites_to_json_list
+
+Convert ranked rows into a compact list of site hashes for the JSON summary,
+capped at $limit entries for UI compactness.
+
+=cut
+
+sub sites_to_json_list {
+    my ($ranked, $limit) = @_;
+
+    my @sites;
+    my $rank = 0;
+    for my $r (@$ranked) {
+        last if defined $limit && $rank >= $limit;
+        $rank++;
+        push @sites, {
+            rank        => $rank,
+            chain       => $r->{chain},
+            pos         => ($r->{pos} + 0),
+            icode       => $r->{icode},
+            residue     => $r->{resname},
+            probability => ($r->{prob} + 0),
+            ($r->{resname} eq 'PRO' ? (note => 'already PRO') : ()),
+        };
+    }
+    return \@sites;
+}
+
+=head2 generate_summaries
+
+Produce ranked summary artifacts from the annotated PDB outputs: a TSV per
+analysis plus a single combined JSON. All files are written into $output_dir so
+they are picked up automatically by upload_results/find_files.
+
+=cut
+
+sub generate_summaries {
+    my ($output_files, $output_dir, $input_basename, $analysis_type) = @_;
+
+    my $TOP_N = 25;   # cap for JSON site lists; TSV keeps the full ranking
+    my %summary = (
+        input         => "$input_basename.pdb",
+        analysis_type => $analysis_type,
+    );
+
+    for my $pdb (@$output_files) {
+        my $analysis;
+        if    ($pdb =~ /_proline\.pdb$/)   { $analysis = 'proline' }
+        elsif ($pdb =~ /_disulfide\.pdb$/) { $analysis = 'disulfide' }
+        else  { next }
+
+        my $rows   = parse_pdb_residue_scores($pdb);
+        my $ranked = rank_sites($rows, $analysis);
+
+        my $tsv_path = "$output_dir/${input_basename}_${analysis}_summary.tsv";
+        write_summary_tsv($ranked, $tsv_path, $analysis);
+
+        my $key = ($analysis eq 'proline') ? 'top_sites' : 'cys_sites';
+        $summary{$analysis} = { $key => sites_to_json_list($ranked, $TOP_N) };
+    }
+
+    my $json_path = "$output_dir/${input_basename}_summary.json";
+    write_file($json_path, to_json(\%summary, { pretty => 1, canonical => 1 }));
+    print "Wrote summary: $json_path\n";
 }
 
 __END__

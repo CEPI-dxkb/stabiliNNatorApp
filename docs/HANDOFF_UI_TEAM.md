@@ -69,17 +69,49 @@ See `app_specs/StabiliNNator.json` for the complete specification.
 
 ### File Naming Convention
 Output files follow this pattern:
-- `{input_basename}_proline.pdb` - Proline analysis results
-- `{input_basename}_disulfide.pdb` - Disulfide analysis results
+- `{input_basename}_proline.pdb` - Proline analysis results (annotated structure)
+- `{input_basename}_disulfide.pdb` - Disulfide analysis results (annotated structure)
+- `{input_basename}_proline_summary.tsv` - Ranked proline substitution sites
+- `{input_basename}_disulfide_summary.tsv` - Ranked cysteine (disulfide) sites
+- `{input_basename}_summary.json` - Combined structured summary (for the UI)
 
-### Output File Type
-All output files are PDB format with probabilities encoded in the B-factor column.
+### Annotated PDBs (B-factor encoding)
+The `*_proline.pdb` / `*_disulfide.pdb` files carry the per-residue probability
+in the B-factor column (workspace type `pdb`, value range 0.0-1.0). Best viewed
+in a molecular viewer colored by B-factor.
 
+### Ranked summaries (recommended for the UI)
+The app also generates **human- and UI-friendly ranked summaries** so the UI can
+show "top sites" without parsing PDB B-factors.
+
+**`*_summary.tsv`** (tab-separated, one per analysis, sorted by probability
+descending; full residue list):
+
+- proline columns: `rank, chain, pos, residue, probability, note`
+  (`note` = `already PRO` for residues that are already proline — not
+  substitution candidates)
+- disulfide columns: `rank, chain, pos, residue, probability`
+  (**cysteine residues only** — CYS/CYX)
+
+**`{input_basename}_summary.json`** — the structured form to drive the results
+table. Only the analyses that ran are present. Site lists are capped at the top
+25 for compactness (the TSV keeps the full ranking):
+
+```json
+{
+  "input": "myprotein.pdb",
+  "analysis_type": "both",
+  "proline":   { "top_sites": [
+    { "rank": 1, "chain": "A", "pos": 21, "icode": "", "residue": "THR", "probability": 0.97 }
+  ] },
+  "disulfide": { "cys_sites": [
+    { "rank": 1, "chain": "A", "pos": 3, "icode": "", "residue": "CYS", "probability": 1.0 }
+  ] }
+}
 ```
-Type: structure (PDB)
-Content: Protein structure with stability probabilities in B-factor column
-Value Range: 0.0 to 1.0
-```
+
+Proline `top_sites` entries that are already proline additionally carry
+`"note": "already PRO"`.
 
 ## UI Recommendations
 
