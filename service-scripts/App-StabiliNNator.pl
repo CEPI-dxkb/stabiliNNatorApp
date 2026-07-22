@@ -361,7 +361,7 @@ sub upload_results {
                 # Determine file type for workspace
                 my $type = "txt";
                 if ($file =~ /\.(pdb|cif|mmcif)$/i) {
-                    $type = "structure";
+                    $type = "pdb";
                 } elsif ($file =~ /\.json$/i) {
                     $type = "json";
                 }

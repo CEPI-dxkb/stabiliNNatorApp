@@ -189,6 +189,17 @@ un=user@bvbrc|tokenid=...|expiry=...|client_id=...|token_type=Bearer|...
    docker run -v ~/.patric_token:/root/.patric_token:ro ...
    ```
    However, `P3_AUTH_TOKEN` environment variable is preferred for production.
+4. **Valid workspace object types**: `save_file_to_file` rejects unknown
+   types with `_ERROR_Invalid type submitted!_` and nothing is uploaded.
+   Output PDBs must use type **`pdb`** (not `structure`, which is invalid).
+   Other verified-valid types: `unspecified`, `txt`, `contigs`, `json`.
+5. **job_result folder quirk (local testing only)**: When running the
+   AppScript directly (outside the real AppService) into a pre-existing
+   output folder, the framework's `job_result` write logs
+   `_ERROR_Cannot overwrite directory <output>/ on save!_`. This is the
+   framework writing task metadata, not the data upload — the result PDBs
+   still upload correctly. In production the AppService creates a fresh
+   output folder per task, so this does not occur.
 
 ## Container Entry Points
 
