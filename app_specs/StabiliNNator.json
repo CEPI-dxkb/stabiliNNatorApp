@@ -19,7 +19,11 @@
             "type": "enum",
             "required": 1,
             "default": "both",
-            "enum": ["proline", "disulfide", "both"],
+            "enum": [
+                "proline",
+                "disulfide",
+                "both"
+            ],
             "label": "Analysis Type",
             "desc": "Type of stability analysis to perform. 'proline' predicts favorable proline mutation sites, 'disulfide' predicts favorable disulfide bond sites, 'both' runs both analyses."
         },
@@ -36,9 +40,24 @@
             "type": "enum",
             "required": 0,
             "default": "cpu",
-            "enum": ["cpu", "gpu"],
+            "enum": [
+                "cpu",
+                "gpu"
+            ],
             "label": "Compute Device",
             "desc": "Hardware accelerator to use. CPU is recommended (faster than GPU for these small models due to CUDA overhead). GPU option available but provides no performance benefit."
+        },
+        {
+            "id": "theme",
+            "type": "enum",
+            "required": 0,
+            "default": "bvbrc",
+            "enum": [
+                "bvbrc",
+                "editorial"
+            ],
+            "label": "Report Theme",
+            "desc": "Visual theme for the generated HTML report. 'bvbrc' matches the BV-BRC portal styling (default); 'editorial' is an alternative editorial layout."
         },
         {
             "id": "output_path",

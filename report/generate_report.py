@@ -229,8 +229,9 @@ def build_data(args):
             "chain": r["chain"], "pos": r["pos"], "res": r["res"],
             "one": THREE2ONE.get(r["res"], "X"),
             "proline_p": pro_by[key]["prob"] if key in pro_by else None,
-            # disulfide value only meaningful for cysteines
-            "disulfide_p": dis_by[key]["prob"] if (is_cys and key in dis_by) else None,
+            # disulfiNNate scores every residue, so report the value for all of
+            # them (not only cysteines) in the per-residue table
+            "disulfide_p": dis_by[key]["prob"] if key in dis_by else None,
             "is_cys": is_cys,
         })
 
@@ -240,15 +241,21 @@ def build_data(args):
 
     analyses = []
     if args.proline:
+        # Exclude existing cysteines from proline substitution candidates -- a
+        # Cys is likely in a disulfide and should not be mutated away. Existing
+        # prolines are kept but flagged. (The full per-residue table still lists
+        # every residue's proline score.)
         ranked = sorted(
             [{"pos": r["pos"], "chain": r["chain"], "res": r["res"], "prob": r["prob"],
-              "already_pro": r["res"] == "PRO"} for r in pro_rows],
+              "already_pro": r["res"] == "PRO"}
+             for r in pro_rows if r["res"] not in CYS_NAMES],
             key=lambda x: -x["prob"])
         analyses.append({
             "key": "proline", "label": "proliNNator",
             "blurb": "Scores how favorable a proline substitution is at each residue. "
                      "High score = a position where introducing proline is predicted to "
-                     "rigidify the backbone without disrupting the fold.",
+                     "rigidify the backbone without disrupting the fold. Existing "
+                     "cysteines are excluded as candidates; existing prolines are flagged.",
             "model": os.path.basename(args.proline_model) if args.proline_model else "proline_gat.pt",
             "command": analysis_command("proline", os.path.basename(args.proline_model) if args.proline_model else None,
                                         args.hidden_dim, args.device),

@@ -260,7 +260,7 @@ sub run_stabilinnator {
     try {
         generate_html_report($output_dir, $input_basename, $analysis_type,
             $local_input, $output_path, $device, ($hidden_dim // 32),
-            $prolinnator_model, $disulfinnate_model);
+            $prolinnator_model, $disulfinnate_model, ($params->{theme} // 'bvbrc'));
     } catch {
         warn "HTML report generation failed (continuing with data outputs): $_\n";
     };
@@ -638,13 +638,21 @@ uploaded automatically, and links to those sibling files. Non-fatal.
 
 sub generate_html_report {
     my ($output_dir, $basename, $analysis_type, $input_file, $ws_path,
-        $device, $hidden_dim, $pro_model, $dis_model) = @_;
+        $device, $hidden_dim, $pro_model, $dis_model, $theme) = @_;
 
     # Locate the report template + generator within the module. Overridable via
     # STABILINNATOR_MODULE_DIR; otherwise derived from this script's location.
     my $module_dir = $ENV{STABILINNATOR_MODULE_DIR}
         // dirname(dirname(abs_path(__FILE__)));
-    my $template = "$module_dir/report/report_template.html";
+
+    # Theme registry -> template file. Default is the BV-BRC theme. Add new
+    # themes (e.g. 'cepi') here alongside their template file.
+    my %theme_template = (
+        bvbrc     => "report_template_bvbrc.html",
+        editorial => "report_template.html",
+    );
+    my $tpl_file = $theme_template{$theme // 'bvbrc'} // $theme_template{bvbrc};
+    my $template = "$module_dir/report/$tpl_file";
     my $script   = "$module_dir/report/generate_report.py";
     unless (-f $template && -f $script) {
         warn "Report template/script not found under $module_dir/report; skipping HTML report\n";
