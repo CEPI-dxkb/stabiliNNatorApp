@@ -132,6 +132,12 @@ footer{margin-top:60px; padding-top:24px; border-top:1px solid var(--line-strong
 footer code{color:var(--sulfur); font-family:var(--mono)}
 :focus-visible{outline:2px solid var(--proline); outline-offset:2px; border-radius:3px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.viewer{width:100%; height:440px; position:relative; background:var(--sunken); border:1px solid var(--line); border-radius:6px; overflow:hidden}
+.vbar{display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:10px}
+.vbtn{font-family:var(--sans); font-size:12px; font-weight:600; cursor:pointer; border:1px solid var(--line-strong); background:var(--surface); color:var(--body); border-radius:999px; padding:5px 13px}
+.vbtn.active{background:var(--proline); color:#fff; border-color:var(--proline)}
+.vbtn.sul.active{background:var(--sulfur); border-color:var(--sulfur)}
+.vhint{font-family:var(--sans); font-size:12px; color:var(--muted)}
 .hidden{display:none!important}
 .track-toggle{font-family:var(--sans); font-size:12.5px; font-weight:600; color:var(--proline); background:none; border:1px solid var(--line-strong); border-radius:8px; padding:6px 13px; cursor:pointer; margin-top:12px}
 .track-toggle:hover{border-color:var(--proline)}
@@ -198,8 +204,22 @@ footer code{color:var(--sulfur); font-family:var(--mono)}
     </details>
   </section>
 
+  <section id="s-structure" class="hidden">
+    <div class="sec-head"><span class="sec-num">05</span><h2>Structure</h2><span class="sub">top sites in 3D</span></div>
+    <figure class="card">
+      <div class="vbar">
+        <span class="vhint">Highlight:</span>
+        <button class="vbtn pro active" id="v-pro" type="button">Proline sites</button>
+        <button class="vbtn sul" id="v-dis" type="button">Disulfide sites</button>
+        <span class="vhint" id="v-note" style="margin-left:auto">drag to rotate · scroll to zoom</span>
+      </div>
+      <div class="viewer" id="viewer3d"></div>
+      <figcaption class="figcap" id="v-cap"></figcaption>
+    </figure>
+  </section>
+
   <section id="s-downloads">
-    <div class="sec-head"><span class="sec-num">05</span><h2>Output data</h2><span class="sub">files in this job folder</span></div>
+    <div class="sec-head"><span class="sec-num">06</span><h2>Output data</h2><span class="sub">files in this job folder</span></div>
     <div class="card">
       <div class="dl-files" id="dl-files"></div>
       <div class="ws-note" id="ws-note"></div>
@@ -210,6 +230,8 @@ footer code{color:var(--sulfur); font-family:var(--mono)}
 </div>
 <div id="tip"></div>
 
+<script>/*{{THREEDMOL_JS}}*/</script>
+<script id="structure-pdb" type="text/plain">{{STRUCTURE_PDB}}</script>
 <script id="report-data" type="application/json">{{REPORT_DATA_JSON}}</script>
 <script>
 const DATA = JSON.parse(document.getElementById('report-data').textContent);
@@ -545,5 +567,50 @@ function renderBars(mount, rows, cls, kind){
      BV-BRC <code>App-StabiliNNator</code> service.</p>`+
     (DATA.source&&DATA.source.repo?`<p style="max-width:72ch;margin:10px 0 0">Prediction models: <b>stabiliNNator</b>
      (proliNNator + disulfiNNate) — source <a href="${esc(DATA.source.repo)}" target="_blank" rel="noopener">${esc(DATA.source.repo.replace(/^https?:\/\/(www\.)?github\.com\//,''))}</a>${DATA.source.commit?` @ <code>${esc(DATA.source.commit)}</code>`:''}.</p>`:'');
+})();
+
+/* 3D structure viewer (optional; needs inlined 3Dmol.js + coordinates) */
+(()=>{
+  const sec=document.getElementById('s-structure');
+  const el=document.getElementById('viewer3d');
+  const pdbEl=document.getElementById('structure-pdb');
+  const pdb=pdbEl?pdbEl.textContent.trim():'';
+  if(!sec||!el||!pdb||typeof $3Dmol==='undefined')return;   // leave section hidden
+  const TOPN=10;
+  const topFor=k=>{const a=DATA.analyses.find(x=>x.key===k);return a?a.sites.slice(0,TOPN):[];};
+  const probMap={proline:{},disulfide:{}};
+  DATA.per_residue.forEach(r=>{const k=(r.chain||'A')+'/'+r.pos;
+    probMap.proline[k]=r.proline_p==null?0:r.proline_p; probMap.disulfide[k]=r.disulfide_p==null?0:r.disulfide_p;});
+  const hasPro=DATA.analyses.some(a=>a.key==='proline'), hasDis=DATA.analyses.some(a=>a.key==='disulfide');
+  let mode=hasPro?'proline':'disulfide', viewer, model;
+  try{
+    viewer=$3Dmol.createViewer(el,{backgroundColor:'0xffffff'});
+    model=viewer.addModel(pdb,'pdb');
+    const draw=()=>{
+      const pm=probMap[mode];
+      model.selectedAtoms({}).forEach(a=>{a.b=pm[(a.chain||'A')+'/'+a.resi]||0;});
+      viewer.setStyle({},{cartoon:{colorscheme:{prop:'b',gradient:'roygb',min:0,max:1}}});
+      if(mode==='disulfide') viewer.addStyle({resn:['CYS','CYX']},{stick:{colorscheme:'yellowCarbon',radius:0.22}});
+      topFor(mode).forEach(s=>{
+        const sel={chain:s.chain,resi:s.pos};
+        viewer.addStyle(sel,{stick:{radius:0.32,color:mode==='proline'?'#015994':'#b0760c'}});
+        viewer.addResLabels(sel,{font:'Arial',fontSize:11,fontColor:'white',
+          backgroundColor:mode==='proline'?'#015994':'#b0760c',backgroundOpacity:0.92,showBackground:true});
+      });
+      viewer.render();
+    };
+    sec.classList.remove('hidden');
+    viewer.zoomTo(); draw();
+    const bpro=document.getElementById('v-pro'), bdis=document.getElementById('v-dis');
+    if(!hasPro)bpro.classList.add('hidden'); if(!hasDis)bdis.classList.add('hidden');
+    const setActive=()=>{bpro.classList.toggle('active',mode==='proline');bdis.classList.toggle('active',mode==='disulfide');};
+    bpro.addEventListener('click',()=>{mode='proline';setActive();viewer.removeAllLabels();draw();});
+    bdis.addEventListener('click',()=>{mode='disulfide';setActive();viewer.removeAllLabels();draw();});
+    setActive();
+    document.getElementById('v-cap').innerHTML='<b>Interactive structure.</b> Cartoon shaded by prediction '+
+      'score (red = low, blue = high). The top '+TOPN+' sites for the selected analysis are drawn as labeled sticks '+
+      '(disulfide-forming cysteines in yellow) — rotate and zoom to judge whether a site sits in defined secondary '+
+      'structure, a flexible loop, or a buried core before committing to a mutation.';
+  }catch(e){ sec.classList.add('hidden'); }
 })();
 </script>

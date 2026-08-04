@@ -35,6 +35,11 @@ THREE2ONE = {
 }
 CYS_NAMES = {"CYS", "CYX"}
 PLACEHOLDER = "{{REPORT_DATA_JSON}}"
+LIB_PLACEHOLDER = "/*{{THREEDMOL_JS}}*/"
+STRUCT_PLACEHOLDER = "{{STRUCTURE_PDB}}"
+# Records worth embedding for the 3D viewer: coordinates + secondary structure
+# + disulfide connectivity (helps the viewer draw cartoons and SS bonds).
+STRUCT_RECORDS = ("ATOM", "TER", "HELIX", "SHEET", "SSBOND")
 
 # Human-readable label for each output file, matched most-specific first.
 OUTPUT_KINDS = [
@@ -70,6 +75,17 @@ def first_model_lines(path):
             if line.startswith("ENDMDL") and seen_model:
                 return
             yield line
+
+
+def extract_structure(path):
+    """First-model coordinates + secondary-structure/disulfide records, as a
+    string to embed for the 3D viewer. HETATM/water are dropped to keep size
+    down and focus on the protein."""
+    keep = []
+    for line in first_model_lines(path):
+        if line.startswith(STRUCT_RECORDS):
+            keep.append(line if line.endswith("\n") else line + "\n")
+    return "".join(keep)
 
 
 def parse_ca_bfactors(path):
@@ -345,6 +361,11 @@ def main(argv=None):
                    help="pinned upstream commit (short or full), shown in provenance")
     p.add_argument("--name", help="display name for the structure (defaults to file stem)")
     p.add_argument("--generated", help="override the generated timestamp (for reproducible output)")
+    default_lib = os.path.join(os.path.dirname(os.path.abspath(__file__)), "vendor", "3Dmol-min.js")
+    p.add_argument("--viewer-lib", dest="viewer_lib", default=default_lib,
+                   help="path to vendored 3Dmol-min.js to inline for the 3D viewer")
+    p.add_argument("--no-viewer", dest="no_viewer", action="store_true",
+                   help="skip the embedded 3D structure viewer")
     args = p.parse_args(argv)
 
     data = build_data(args)
@@ -359,11 +380,30 @@ def main(argv=None):
     blob = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
     html = template.replace(PLACEHOLDER, blob)
 
+    # Optional 3D viewer: inline the coordinates + the 3Dmol.js library, only if
+    # the template declares the placeholders. Missing library/structure just
+    # leaves the viewer hidden (the template JS guards on it).
+    viewer_on = False
+    if STRUCT_PLACEHOLDER in template or LIB_PLACEHOLDER in template:
+        struct = ""
+        if args.input and not args.no_viewer:
+            try:
+                struct = extract_structure(args.input)
+            except OSError:
+                struct = ""
+        lib = ""
+        if struct and not args.no_viewer and os.path.exists(args.viewer_lib):
+            with open(args.viewer_lib) as fh:
+                lib = fh.read()
+        viewer_on = bool(struct and lib)
+        html = html.replace(STRUCT_PLACEHOLDER, struct)
+        html = html.replace(LIB_PLACEHOLDER, lib)
+
     with open(args.output, "w") as fh:
         fh.write(html)
-    print("Wrote report: %s (%d residues, %d analyses, %d disulfide bonds)"
+    print("Wrote report: %s (%d residues, %d analyses, %d disulfide bonds, viewer=%s)"
           % (args.output, data["input"]["n_residues"], len(data["analyses"]),
-             len(data["disulfide_bonds"])))
+             len(data["disulfide_bonds"]), "on" if viewer_on else "off"))
     return 0
 
 
