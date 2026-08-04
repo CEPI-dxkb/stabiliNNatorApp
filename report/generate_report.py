@@ -304,6 +304,11 @@ def build_data(args):
             "container": args.container,
             "service": "BV-BRC App-StabiliNNator",
         },
+        "source": {
+            "name": "stabiliNNator",
+            "repo": args.source_repo,
+            "commit": args.source_commit,
+        },
         "outputs": outputs,
         "workspace_path": args.workspace_path or "",
         "link_mode": args.link_mode,
@@ -326,6 +331,11 @@ def main(argv=None):
     p.add_argument("--hidden-dim", dest="hidden_dim", default="32")
     p.add_argument("--device", default="cpu")
     p.add_argument("--container", default="dxkb/stabilinnator-bvbrc")
+    p.add_argument("--source-repo", dest="source_repo",
+                   default="https://github.com/schoederlab/stabiliNNator",
+                   help="upstream tool repository, shown in the report provenance")
+    p.add_argument("--source-commit", dest="source_commit", default="",
+                   help="pinned upstream commit (short or full), shown in provenance")
     p.add_argument("--name", help="display name for the structure (defaults to file stem)")
     p.add_argument("--generated", help="override the generated timestamp (for reproducible output)")
     args = p.parse_args(argv)

@@ -655,6 +655,12 @@ sub generate_html_report {
     my $pro_pdb = "$output_dir/${basename}_proline.pdb";
     my $dis_pdb = "$output_dir/${basename}_disulfide.pdb";
 
+    # Record the exact upstream tool commit for provenance (the source is a git
+    # clone at STABILINNATOR_DIR). Best-effort; empty if git/clone unavailable.
+    my $stabilinnator_dir = $ENV{STABILINNATOR_DIR} // "/opt/stabilinnator";
+    my $src_commit = `git -C $stabilinnator_dir rev-parse --short HEAD 2>/dev/null`;
+    chomp $src_commit;
+
     my @cmd = ("python", $script,
         "--template",       $template,
         "--output",         $report,
@@ -664,7 +670,9 @@ sub generate_html_report {
         "--device",         $device,
         "--container",      "dxkb/stabilinnator-bvbrc",
         "--link-mode",      "relative",
+        "--source-repo",    "https://github.com/schoederlab/stabiliNNator",
     );
+    push @cmd, "--source-commit", $src_commit if $src_commit;
     push @cmd, "--proline",   $pro_pdb, "--proline-model",   $pro_model if -f $pro_pdb;
     push @cmd, "--disulfide", $dis_pdb, "--disulfide-model", $dis_model if -f $dis_pdb;
 
