@@ -88,7 +88,8 @@
         "runtime": 120,
         "storage": "1G",
         "policy_data": {
-            "gpu_count": 0
+            "gpu_count": 0,
+            "partition": "gpu2"
         }
     }
 }

@@ -47,6 +47,14 @@ startup overhead is counted. The app therefore treats GPU as optional
 - **Consequence:** the preflight must not demand a GPU partition; jobs schedule
   on CPU nodes by default.
 
+- **Amended 2026-08-22:** the consequence above no longer holds. The app is now
+  deployed in the shared ProteinPrediction container, which is only available on
+  the GPU partitions, so preflight requests `partition: gpu2`. This is a
+  placement constraint imposed by where the container exists, not a reversal of
+  the decision above: inference still runs on CPU by default and preflight still
+  requests `gpu_count: 0`. The reasoning about GPU being optional for *compute*
+  stands.
+
 ### 3. Preflight resource requests are driven by measured benchmarks
 
 Rather than guess CPU/memory/runtime, Phase 1 captured runtime metrics across

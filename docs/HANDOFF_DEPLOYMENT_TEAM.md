@@ -69,7 +69,7 @@ Based on actual benchmarks (see [RUNTIME_METRICS.md](RUNTIME_METRICS.md)):
         "storage": "1G",
         "policy_data": {
             "gpu_count": 0,
-            "partition": "normal"
+            "partition": "gpu2"
         }
     }
 }
