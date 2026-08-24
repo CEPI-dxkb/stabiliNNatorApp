@@ -105,7 +105,11 @@ sub preflight {
         storage => $storage,
         policy_data => {
             gpu_count => $gpu_count,
-            partition => 'normal',  # Always use normal partition (CPU is faster)
+            # Placement constraint, not a compute choice: this app is deployed in
+            # the ProteinPrediction container, which is only available on the GPU
+            # partitions. We still run inference on CPU by default (faster for
+            # these small models), hence gpu_count => 0 on a gpu partition.
+            partition => 'gpu2',
         }
     };
 }
