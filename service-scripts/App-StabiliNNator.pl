@@ -105,7 +105,12 @@ sub preflight {
         storage => $storage,
         policy_data => {
             gpu_count => $gpu_count,
-            partition => 'normal',  # Always use normal partition (CPU is faster)
+            # Placement constraint, not a compute choice: this app is deployed
+            # in the shared ProteinPrediction container and must be scheduled
+            # where that container is available. Inference still runs on CPU by
+            # default (faster for these small models), hence gpu_count => 0.
+            # If 'compute' turns out not to host the container, switch to 'gpu2'.
+            partition => 'compute',
         }
     };
 }
