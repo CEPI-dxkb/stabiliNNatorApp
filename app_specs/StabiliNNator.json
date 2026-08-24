@@ -89,7 +89,7 @@
         "storage": "1G",
         "policy_data": {
             "gpu_count": 0,
-            "partition": "gpu2"
+            "partition": "compute"
         }
     }
 }
