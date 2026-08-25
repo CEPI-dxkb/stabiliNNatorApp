@@ -61,15 +61,15 @@ Based on actual benchmarks (see [RUNTIME_METRICS.md](RUNTIME_METRICS.md)):
 {
     "default_cpu": 2,
     "default_memory": "1G",
-    "default_runtime": 120,
+    "default_runtime": 600,
     "preflight": {
         "cpu": 2,
         "memory": "1G",
-        "runtime": 120,
+        "runtime": 600,
         "storage": "1G",
         "policy_data": {
             "gpu_count": 0,
-            "partition": "compute"
+            "partition": "gpu2"
         }
     }
 }

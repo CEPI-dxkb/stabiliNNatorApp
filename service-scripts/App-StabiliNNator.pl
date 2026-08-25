@@ -141,6 +141,16 @@ sub run_stabilinnator {
     print "Starting stabiliNNator protein stability prediction\n";
     print STDERR "Parameters: " . Dumper($params) . "\n" if $ENV{P3_DEBUG};
 
+    # output_path and output_file are both required, and both are checked here
+    # rather than relying on "required": 1 in the app spec. The framework does
+    # not enforce required for output_file: preprocess_parameters runs
+    # "$params->{output_file} =~ s,/,_,g" before its required-check loop, and
+    # that substitution autovivifies the key, so the loop sees it as present.
+    # Without this guard a job missing output_file uploads to "$output_path/."
+    # and lands in a literal "." folder. Same check as App-PredictStructure.pl.
+    die "output_path is required.\n" unless $params->{output_path};
+    die "output_file is required.\n" unless $params->{output_file};
+
     # Create working directories
     my $work_dir = $ENV{P3_WORKDIR} // $ENV{TMPDIR} // "/tmp";
     my $input_dir = "$work_dir/input";
@@ -269,23 +279,58 @@ sub run_stabilinnator {
         warn "Summary generation failed (continuing with PDB outputs): $_\n";
     };
 
-    # Upload results to workspace
+    # Upload results to workspace.
+    #
+    # Upload into the framework-created result folder ("$output_path/.$output_file"),
+    # NOT into $output_path itself. AppScript::write_results builds the job's
+    # output_files list by ls-ing $app->result_folder(); uploading anywhere else
+    # leaves that folder empty, so the job records "output_files": [] and the
+    # workspace UI (and the REPORT action, which scans output_files for
+    # *_report.html) sees no results at all. Uploading flat also means concurrent
+    # jobs over the same input structure overwrite each other, since our output
+    # filenames derive from the input basename rather than from output_file.
+    #
+    # Fall back to $output_path when result_folder is unset. That is NOT the
+    # interactive case -- subproc_run always calls setup_folders, so the folder
+    # exists even at a terminal. It is unset only when skip_workspace_output set
+    # donot_create_result_folder (in which case write_results returns early and
+    # nothing reads output_files), or when $app is a mock in unit tests.
+    #
+    # App-PredictStructure.pl additionally strips a trailing "/." here. We do
+    # not, deliberately. That strip only ever fires when output_file is absent
+    # (result_folder is then "$output_path/."), which is a degenerate case with
+    # no good answer: strip it and we upload to $output_path while write_results
+    # still ls's "$output_path/.", so output_files comes back empty -- exactly
+    # the #18 symptom. Leave it and the files land in a literal "." folder,
+    # which is ugly but keeps output_files populated. We prefer the latter.
+    #
+    # The scheduler always supplies output_file, so neither path is reachable in
+    # a real job; the durable fix is making output_file required in the app spec.
+    #
+    # NB: App-PredictStructure.pl's comment at that site claims it called
+    # donot_create_result_folder(1) and that result_folder() is therefore undef.
+    # It does not call it -- grep the file; the string appears only in that
+    # comment. Its result_folder() is set by the framework just like ours.
     my $output_path = $params->{output_path};
     die "Output path is required\n" unless $output_path;
+
+    my $result_folder = ($app && $app->can('result_folder') ? $app->result_folder() : undef)
+        // $output_path;
+    $result_folder =~ s{/+$}{};      # tolerate a caller-supplied trailing slash
 
     # Generate a self-contained HTML report from the outputs. Runs after the
     # summaries so they are listed in the report's downloads. Non-fatal: the
     # data files must still upload if report generation fails.
     try {
         generate_html_report($output_dir, $input_basename, $analysis_type,
-            $local_input, $output_path, $device, ($hidden_dim // 32),
+            $local_input, $result_folder, $device, ($hidden_dim // 32),
             $prolinnator_model, $disulfinnate_model, ($params->{theme} // 'bvbrc'));
     } catch {
         warn "HTML report generation failed (continuing with data outputs): $_\n";
     };
 
-    print "Uploading results to workspace: $output_path\n";
-    upload_results($app, $output_dir, $output_path);
+    print "Uploading results to workspace: $result_folder\n";
+    upload_results($app, $output_dir, $result_folder);
 
     print "stabiliNNator job completed\n";
     return 0;
@@ -678,7 +723,13 @@ sub generate_html_report {
         return;
     }
 
-    my $report  = "$output_dir/${basename}_report.html";
+    # Fixed report filename, not derived from the input structure. Each job now
+    # uploads into its own result folder (see run_stabilinnator), so there is
+    # nothing left to disambiguate, and a predictable name is easier for the UI
+    # and for users to find. Keep the "_report.html" suffix: the BV-BRC-Web
+    # REPORT action (BV-BRC-Web#1403) matches that exact suffix, so a name like
+    # "stabilinnator.report.html" would make the eye icon inert.
+    my $report  = "$output_dir/stabilinnator_report.html";
     my $pro_pdb = "$output_dir/${basename}_proline.pdb";
     my $dis_pdb = "$output_dir/${basename}_disulfide.pdb";
 
