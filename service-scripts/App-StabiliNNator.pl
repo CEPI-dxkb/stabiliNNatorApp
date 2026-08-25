@@ -286,10 +286,21 @@ sub run_stabilinnator {
     # donot_create_result_folder (in which case write_results returns early and
     # nothing reads output_files), or when $app is a mock in unit tests.
     #
-    # Deliberately no s{/\.$}{} here, unlike App-PredictStructure.pl: that script
-    # sets donot_create_result_folder, so its strip only ever touches a
-    # caller-supplied path. Stripping a framework result_folder would upload
-    # somewhere other than the folder write_results lists, re-breaking #18.
+    # App-PredictStructure.pl additionally strips a trailing "/." here. We do
+    # not, deliberately. That strip only ever fires when output_file is absent
+    # (result_folder is then "$output_path/."), which is a degenerate case with
+    # no good answer: strip it and we upload to $output_path while write_results
+    # still ls's "$output_path/.", so output_files comes back empty -- exactly
+    # the #18 symptom. Leave it and the files land in a literal "." folder,
+    # which is ugly but keeps output_files populated. We prefer the latter.
+    #
+    # The scheduler always supplies output_file, so neither path is reachable in
+    # a real job; the durable fix is making output_file required in the app spec.
+    #
+    # NB: App-PredictStructure.pl's comment at that site claims it called
+    # donot_create_result_folder(1) and that result_folder() is therefore undef.
+    # It does not call it -- grep the file; the string appears only in that
+    # comment. Its result_folder() is set by the framework just like ours.
     my $output_path = $params->{output_path};
     die "Output path is required\n" unless $output_path;
 
