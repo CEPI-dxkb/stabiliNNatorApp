@@ -280,9 +280,16 @@ sub run_stabilinnator {
     # jobs over the same input structure overwrite each other, since our output
     # filenames derive from the input basename rather than from output_file.
     #
-    # Fall back to $output_path when result_folder is unset -- that happens on
-    # direct/interactive invocations that bypass the scheduler, where the
-    # framework never called create_result_folder().
+    # Fall back to $output_path when result_folder is unset. That is NOT the
+    # interactive case -- subproc_run always calls setup_folders, so the folder
+    # exists even at a terminal. It is unset only when skip_workspace_output set
+    # donot_create_result_folder (in which case write_results returns early and
+    # nothing reads output_files), or when $app is a mock in unit tests.
+    #
+    # Deliberately no s{/\.$}{} here, unlike App-PredictStructure.pl: that script
+    # sets donot_create_result_folder, so its strip only ever touches a
+    # caller-supplied path. Stripping a framework result_folder would upload
+    # somewhere other than the folder write_results lists, re-breaking #18.
     my $output_path = $params->{output_path};
     die "Output path is required\n" unless $output_path;
 
