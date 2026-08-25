@@ -85,11 +85,11 @@
     "preflight": {
         "cpu": 2,
         "memory": "1G",
-        "runtime": 120,
+        "runtime": 600,
         "storage": "1G",
         "policy_data": {
             "gpu_count": 0,
-            "partition": "compute"
+            "partition": "gpu2"
         }
     }
 }

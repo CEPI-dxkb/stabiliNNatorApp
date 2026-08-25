@@ -71,14 +71,25 @@ sub preflight {
 
     my $cpu = 2;           # Sufficient for GNN inference
     my $memory = "1G";     # Benchmarked at ~500MB, 1G provides buffer
-    my $runtime = 30;      # Base: container startup + model loading
     my $storage = "1G";    # Output PDBs are small
+
+    # Runtime is dominated by CONTAINER STAGING, not by inference. The shared
+    # ProteinPrediction image is ~27 GB; a node that does not already have it
+    # cached pulls it at ~130 MB/s, i.e. ~3 minutes. The previous 120s
+    # allowance could not absorb that: tasks 23450798-23450800 were dispatched,
+    # spent their whole walltime staging, and were killed with no output at
+    # all (2:12, 1:09, 1:05 elapsed, empty stdout/stderr, no task_status dir).
+    # Inference itself is sub-second; 10 minutes is staging headroom.
+    my $runtime = 600;
 
     # Adjust based on analysis type
     my $analysis_type = $params->{analysis_type} // 'both';
 
+    # Both analyses take ~12s of actual compute; the difference is noise
+    # against staging, so the single 600s allowance covers every analysis
+    # type. Kept explicit so the intent is not mistaken for an oversight.
     if ($analysis_type eq 'both') {
-        $runtime = 60;     # Both analyses: ~12s actual, 60s with buffer
+        $runtime = 600;
     }
 
     # Note: GPU mode is NOT recommended for stabiliNNator
@@ -93,10 +104,9 @@ sub preflight {
         # Keep same runtime (don't reduce)
     }
 
-    # For very large proteins (>1000 residues), disulfiNNate has O(n²) scaling
-    # Add buffer for edge computation: 1AON (8,015 residues) took 18.6s
-    # Without knowing protein size at preflight, use conservative estimate
-    $runtime = $runtime * 2;  # 2x buffer for safety
+    # For very large proteins (>1000 residues), disulfiNNate has O(n²) scaling.
+    # 1AON (8,015 residues) took 18.6s -- still negligible beside staging, and
+    # 600s already carries a large margin, so no additional multiplier.
 
     return {
         cpu => $cpu,
@@ -109,8 +119,12 @@ sub preflight {
             # in the shared ProteinPrediction container and must be scheduled
             # where that container is available. Inference still runs on CPU by
             # default (faster for these small models), hence gpu_count => 0.
-            # If 'compute' turns out not to host the container, switch to 'gpu2'.
-            partition => 'compute',
+            #
+            # 'compute' was tried first and the jobs did dispatch, but then died
+            # with no output (tasks 23450798-23450800) -- those nodes do not
+            # carry the ~27 GB image. gpu2 nodes demonstrably do: every
+            # PredictStructure job runs there from cache. Verified 2026-08-24.
+            partition => 'gpu2',
         }
     };
 }
