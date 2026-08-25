@@ -3,8 +3,8 @@
 `generate_report.py` builds a single self-contained HTML report from a
 stabiliNNator run's outputs. It is called (non-fatally) by
 `service-scripts/App-StabiliNNator.pl` after the TSV/JSON summaries, and the
-resulting `<name>_report.html` is uploaded into the same workspace folder as the
-data files (with workspace type `html`, so the BV-BRC portal renders it).
+resulting `stabilinnator_report.html` is uploaded into the job's result folder
+alongside the data files (with workspace type `html`, so the BV-BRC portal renders it).
 
 ## How it works
 
@@ -32,7 +32,7 @@ Pure standard library — no third-party Python dependencies.
 ```bash
 python generate_report.py \
   --template report_template.html \
-  --output   <name>_report.html \
+  --output   stabilinnator_report.html \
   --input    <input>.pdb \
   --proline  <name>_proline.pdb   --proline-model   proline_gat.pt \
   --disulfide <name>_disulfide.pdb --disulfide-model cys_gat.pt \

@@ -702,7 +702,13 @@ sub generate_html_report {
         return;
     }
 
-    my $report  = "$output_dir/${basename}_report.html";
+    # Fixed report filename, not derived from the input structure. Each job now
+    # uploads into its own result folder (see run_stabilinnator), so there is
+    # nothing left to disambiguate, and a predictable name is easier for the UI
+    # and for users to find. Keep the "_report.html" suffix: the BV-BRC-Web
+    # REPORT action (BV-BRC-Web#1403) matches that exact suffix, so a name like
+    # "stabilinnator.report.html" would make the eye icon inert.
+    my $report  = "$output_dir/stabilinnator_report.html";
     my $pro_pdb = "$output_dir/${basename}_proline.pdb";
     my $dis_pdb = "$output_dir/${basename}_disulfide.pdb";
 

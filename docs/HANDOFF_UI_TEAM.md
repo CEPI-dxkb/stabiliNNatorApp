@@ -74,7 +74,11 @@ Output files follow this pattern:
 - `{input_basename}_proline_summary.tsv` - Ranked proline substitution sites
 - `{input_basename}_disulfide_summary.tsv` - Ranked cysteine (disulfide) sites
 - `{input_basename}_summary.json` - Combined structured summary (for the UI)
-- `{input_basename}_report.html` - **Self-contained HTML report** (workspace type `html`)
+- `stabilinnator_report.html` - **Self-contained HTML report** (workspace type `html`)
+
+The report filename is fixed, not derived from the input structure: each job
+uploads into its own result folder, so there is nothing to disambiguate. It
+keeps the `_report.html` suffix that the portal's REPORT action matches.
 
 ### HTML report (rendered in the portal)
 Every run also produces a single self-contained `*_report.html` uploaded with
