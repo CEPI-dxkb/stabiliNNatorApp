@@ -5,7 +5,7 @@
     "description": "Predict protein stability improvements using Graph Neural Networks. proliNNator predicts proline mutation probabilities at each residue position, while disulfiNNate predicts disulfide bond formation likelihood between cysteine pairs. Both analyses output PDB files with probabilities encoded in the B-factor column (0-1 range).",
     "default_memory": "1G",
     "default_cpu": 2,
-    "default_runtime": 120,
+    "default_runtime": 600,
     "parameters": [
         {
             "id": "input_file",
@@ -89,7 +89,7 @@
         "storage": "1G",
         "policy_data": {
             "gpu_count": 0,
-            "partition": "gpu2"
+            "partition": "compute"
         }
     }
 }

@@ -57,11 +57,19 @@ startup overhead is counted. The app therefore treats GPU as optional
   stands.
 
   `compute` was tried first and failed: jobs dispatched and were placed, but
-  died with empty output because those nodes do not carry the ~27 GB image
-  (tasks 23450798-23450800). The partition is now `gpu2`, whose nodes have the
-  image cached because every PredictStructure job runs there. Runtime also went
+  died with empty output because those nodes did not carry the ~27 GB image
+  (tasks 23450798-23450800). It moved to `gpu2`, whose nodes have the image
+  cached because every PredictStructure job runs there. Runtime also went
   120s -> 600s, since walltime is dominated by container staging (a cold pull of
   27 GB is ~3 minutes) rather than by inference, which stays sub-second.
+
+- **Retried 2026-08-25:** the partition is back to `compute`, deliberately, to
+  retest it now that the image may be staged more widely. `gpu2` placement
+  occupies GPU nodes for inference that is CPU-only by design, so `compute` is
+  the better placement if it works. **`gpu2` remains the known-good fallback:**
+  if jobs again complete with empty output, or die without a `task_status`
+  directory, revert `partition` to `gpu2` in both `service-scripts/App-StabiliNNator.pl`
+  and `app_specs/StabiliNNator.json`.
 
 ### 3. Preflight resource requests are driven by measured benchmarks
 
