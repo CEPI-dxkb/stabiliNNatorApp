@@ -120,11 +120,14 @@ sub preflight {
             # where that container is available. Inference still runs on CPU by
             # default (faster for these small models), hence gpu_count => 0.
             #
-            # 'compute' was tried first and the jobs did dispatch, but then died
-            # with no output (tasks 23450798-23450800) -- those nodes do not
-            # carry the ~27 GB image. gpu2 nodes demonstrably do: every
-            # PredictStructure job runs there from cache. Verified 2026-08-24.
-            partition => 'gpu2',
+            # 'compute' was tried on 2026-08-24 and the jobs dispatched but then
+            # died with no output (tasks 23450798-23450800) -- those nodes did
+            # not carry the ~27 GB image, so it was reverted to gpu2 (PR #17).
+            # Being retried deliberately: if the image is now staged on the
+            # compute nodes this is the better placement, since it stops
+            # occupying GPU nodes for CPU-only inference. If jobs again die with
+            # empty output, revert to 'gpu2' -- that is the known-good value.
+            partition => 'compute',
         }
     };
 }
