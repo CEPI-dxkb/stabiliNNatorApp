@@ -269,23 +269,40 @@ sub run_stabilinnator {
         warn "Summary generation failed (continuing with PDB outputs): $_\n";
     };
 
-    # Upload results to workspace
+    # Upload results to workspace.
+    #
+    # Upload into the framework-created result folder ("$output_path/.$output_file"),
+    # NOT into $output_path itself. AppScript::write_results builds the job's
+    # output_files list by ls-ing $app->result_folder(); uploading anywhere else
+    # leaves that folder empty, so the job records "output_files": [] and the
+    # workspace UI (and the REPORT action, which scans output_files for
+    # *_report.html) sees no results at all. Uploading flat also means concurrent
+    # jobs over the same input structure overwrite each other, since our output
+    # filenames derive from the input basename rather than from output_file.
+    #
+    # Fall back to $output_path when result_folder is unset -- that happens on
+    # direct/interactive invocations that bypass the scheduler, where the
+    # framework never called create_result_folder().
     my $output_path = $params->{output_path};
     die "Output path is required\n" unless $output_path;
+
+    my $result_folder = ($app && $app->can('result_folder') ? $app->result_folder() : undef)
+        // $output_path;
+    $result_folder =~ s{/+$}{};      # tolerate a caller-supplied trailing slash
 
     # Generate a self-contained HTML report from the outputs. Runs after the
     # summaries so they are listed in the report's downloads. Non-fatal: the
     # data files must still upload if report generation fails.
     try {
         generate_html_report($output_dir, $input_basename, $analysis_type,
-            $local_input, $output_path, $device, ($hidden_dim // 32),
+            $local_input, $result_folder, $device, ($hidden_dim // 32),
             $prolinnator_model, $disulfinnate_model, ($params->{theme} // 'bvbrc'));
     } catch {
         warn "HTML report generation failed (continuing with data outputs): $_\n";
     };
 
-    print "Uploading results to workspace: $output_path\n";
-    upload_results($app, $output_dir, $output_path);
+    print "Uploading results to workspace: $result_folder\n";
+    upload_results($app, $output_dir, $result_folder);
 
     print "stabiliNNator job completed\n";
     return 0;
