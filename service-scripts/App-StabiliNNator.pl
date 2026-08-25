@@ -141,6 +141,16 @@ sub run_stabilinnator {
     print "Starting stabiliNNator protein stability prediction\n";
     print STDERR "Parameters: " . Dumper($params) . "\n" if $ENV{P3_DEBUG};
 
+    # output_path and output_file are both required, and both are checked here
+    # rather than relying on "required": 1 in the app spec. The framework does
+    # not enforce required for output_file: preprocess_parameters runs
+    # "$params->{output_file} =~ s,/,_,g" before its required-check loop, and
+    # that substitution autovivifies the key, so the loop sees it as present.
+    # Without this guard a job missing output_file uploads to "$output_path/."
+    # and lands in a literal "." folder. Same check as App-PredictStructure.pl.
+    die "output_path is required.\n" unless $params->{output_path};
+    die "output_file is required.\n" unless $params->{output_file};
+
     # Create working directories
     my $work_dir = $ENV{P3_WORKDIR} // $ENV{TMPDIR} // "/tmp";
     my $input_dir = "$work_dir/input";
