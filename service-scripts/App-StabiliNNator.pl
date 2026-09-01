@@ -435,12 +435,23 @@ sub convert_mmcif_to_pdb {
 import sys
 from Bio.PDB import MMCIFParser, PDBIO
 
+
+def fail(msg):
+    # stdout, not stderr: the caller captures stdout and quotes the last line
+    # back to the user as the reason the job stopped.
+    print(msg)
+    raise SystemExit(1)
+
+
 src, dst = sys.argv[1], sys.argv[2]
-structure = MMCIFParser(QUIET=True).get_structure("input", src)
+try:
+    structure = MMCIFParser(QUIET=True).get_structure("input", src)
+except Exception as exc:
+    fail("could not parse the mmCIF file (%s: %s)" % (type(exc).__name__, exc))
 
 models = list(structure)
 if not models:
-    sys.exit("mmCIF contains no models.")
+    fail("the mmCIF file contains no models.")
 if len(models) > 1:
     print("mmCIF has %d models; keeping the first" % len(models))
     for extra in models[1:]:
@@ -448,14 +459,14 @@ if len(models) > 1:
 
 wide = sorted({c.id for c in structure[models[0].id] if len(c.id) != 1})
 if wide:
-    sys.exit("mmCIF uses multi-character chain identifiers (%s), which PDB "
-             "format cannot represent. Split the structure by chain, or convert "
-             "it to PDB yourself, before submitting." % ", ".join(wide))
+    fail("the mmCIF file uses multi-character chain identifiers (%s), which PDB "
+         "format cannot represent. Split the structure by chain, or convert it "
+         "to PDB yourself, before submitting." % ", ".join(wide))
 
 n_atoms = sum(1 for _ in structure.get_atoms())
 if n_atoms > 99999:
-    sys.exit("mmCIF contains %d atoms; PDB format holds at most 99999. "
-             "Submit a subset of the structure." % n_atoms)
+    fail("the mmCIF file contains %d atoms; PDB format holds at most 99999. "
+         "Submit a subset of the structure." % n_atoms)
 
 io = PDBIO()
 io.set_structure(structure)
@@ -465,12 +476,28 @@ PY_CONVERT
     close($fh);
 
     print "Input is mmCIF; converting to PDB: $cif_path -> $pdb_path\n";
-    my $out = `python "$script" "$cif_path" "$pdb_path" 2>&1`;
-    my $rc  = $?;
-    print $out if defined $out && length $out;
+
+    # List-form exec, no shell. $cif_path ends in basename() of a workspace
+    # object name chosen by the submitter, so it must never be interpolated
+    # into a command line. Everything else in this script already uses
+    # system(@cmd) for the same reason.
+    my $out = '';
+    open(my $ph, '-|', "python", $script, $cif_path, $pdb_path)
+        or die "Could not run the mmCIF converter: $!\n";
+    {
+        local $/;
+        $out = <$ph> // '';
+    }
+    close($ph);
+    my $rc = $?;
+    print $out if length $out;
 
     if ($rc != 0 || ! -s $pdb_path) {
-        die "Could not convert the mmCIF input to PDB.\n";
+        # The converter reports its own reason on stdout; pass it through
+        # rather than replacing it with a generic failure.
+        my ($why) = grep { /\S/ } reverse split /\n/, $out;
+        die "Could not convert the mmCIF input to PDB"
+            . (defined $why ? ": $why\n" : ".\n");
     }
 
     return $pdb_path;
@@ -684,7 +711,7 @@ sub rank_sites {
     my @filtered = @$rows;
     if ($analysis eq 'disulfide') {
         @filtered = grep { $_->{resname} =~ /^(?:CYS|CYX)$/ } @filtered;
-    } else {
+    } elsif ($analysis eq 'proline') {
         @filtered = grep { $_->{resname} !~ /^(?:CYS|CYX)$/ } @filtered;
     }
 
