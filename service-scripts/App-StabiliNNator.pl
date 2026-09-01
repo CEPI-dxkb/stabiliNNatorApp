@@ -173,10 +173,16 @@ sub run_stabilinnator {
     my $file_format = validate_structure_file($local_input);
     print "Detected file format: $file_format\n";
 
+    # Both prediction tools parse with Bio.PDB.PDBParser and have no mmCIF
+    # reader, so an mmCIF handed straight to --pdb-path yields an empty
+    # structure and dies with a bare StopIteration. Convert it first.
+    $local_input = convert_mmcif_to_pdb($local_input, $input_dir)
+        if $file_format eq 'mmCIF';
+
     # Collapse NMR / multi-model ensembles to the first model. The GNN tools
     # otherwise treat every model as extra residues (e.g. a 38-model, 20-residue
     # ensemble becomes 760 concatenated residues).
-    strip_to_first_model($local_input) if $file_format eq 'PDB';
+    strip_to_first_model($local_input);
 
     # Get analysis parameters
     my $analysis_type = $params->{analysis_type} // 'both';
@@ -399,6 +405,77 @@ sub strip_to_first_model {
     write_file($file, @out);
 }
 
+=head2 convert_mmcif_to_pdb
+
+Convert an mmCIF input to PDB so the prediction tools can read it.
+
+proliNNator and disulfiNNate both import only C<Bio::PDB::PDBParser>; neither
+has an mmCIF reader. Biopython ships in the analysis environment, so the
+conversion is done here rather than pushing the burden onto the submitter.
+
+Multi-model entries are reduced to the first model before writing, and the two
+cases PDB format genuinely cannot represent - multi-character chain identifiers
+and more than 99,999 atoms - are reported as such instead of being silently
+truncated.
+
+Returns the path to the converted PDB.
+
+=cut
+
+sub convert_mmcif_to_pdb {
+    my ($cif_path, $work_dir) = @_;
+
+    (my $pdb_path = $cif_path) =~ s/\.(cif|mmcif)$//i;
+    $pdb_path .= ".pdb";
+    $pdb_path = "$cif_path.pdb" if $pdb_path eq $cif_path;
+
+    my $script = "$work_dir/mmcif_to_pdb.py";
+    open(my $fh, '>', $script) or die "Cannot write $script: $!\n";
+    print $fh <<'PY_CONVERT';
+import sys
+from Bio.PDB import MMCIFParser, PDBIO
+
+src, dst = sys.argv[1], sys.argv[2]
+structure = MMCIFParser(QUIET=True).get_structure("input", src)
+
+models = list(structure)
+if not models:
+    sys.exit("mmCIF contains no models.")
+if len(models) > 1:
+    print("mmCIF has %d models; keeping the first" % len(models))
+    for extra in models[1:]:
+        structure.detach_child(extra.id)
+
+wide = sorted({c.id for c in structure[models[0].id] if len(c.id) != 1})
+if wide:
+    sys.exit("mmCIF uses multi-character chain identifiers (%s), which PDB "
+             "format cannot represent. Split the structure by chain, or convert "
+             "it to PDB yourself, before submitting." % ", ".join(wide))
+
+n_atoms = sum(1 for _ in structure.get_atoms())
+if n_atoms > 99999:
+    sys.exit("mmCIF contains %d atoms; PDB format holds at most 99999. "
+             "Submit a subset of the structure." % n_atoms)
+
+io = PDBIO()
+io.set_structure(structure)
+io.save(dst)
+print("converted %d atoms" % n_atoms)
+PY_CONVERT
+    close($fh);
+
+    print "Input is mmCIF; converting to PDB: $cif_path -> $pdb_path\n";
+    my $out = `python "$script" "$cif_path" "$pdb_path" 2>&1`;
+    my $rc  = $?;
+    print $out if defined $out && length $out;
+
+    if ($rc != 0 || ! -s $pdb_path) {
+        die "Could not convert the mmCIF input to PDB.\n";
+    }
+
+    return $pdb_path;
+}
+
 =head2 determine_device
 
 Determine the compute device to use based on accelerator parameter.
@@ -486,6 +563,11 @@ sub upload_results {
                 my $type = "txt";
                 if ($file =~ /\.(pdb|cif|mmcif)$/i) {
                     $type = "pdb";
+                } elsif ($file =~ /\.tsv$/i) {
+                    # 'tsv' is a first-class workspace type (Workspace typeslist.txt);
+                    # typing these as 'txt' made the browser fall back to a filename
+                    # heuristic instead of the tabular viewer.
+                    $type = "tsv";
                 } elsif ($file =~ /\.json$/i) {
                     $type = "json";
                 } elsif ($file =~ /\.html?$/i) {
