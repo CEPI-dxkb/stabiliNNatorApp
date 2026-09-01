@@ -10,11 +10,25 @@
 // mislabelled 86 of 88 proline rows, including showing "LEU 18" with an
 // "already PRO" badge because the underlying residue really was a proline.
 //
-// Usage: node tests/verify_report_labels.js <generated-report.html> [...]
-// Exit status is non-zero if any row is mislabelled.
+// Usage: node tests/verify_report_labels.js <generated-report.html> [more.html ...]
+// Exit status is non-zero if any row in any report is mislabelled.
 //
 const fs=require('fs');
-const html=fs.readFileSync(process.argv[2],'utf8');
+
+const files=process.argv.slice(2);
+if(!files.length){
+  console.error('usage: node tests/verify_report_labels.js <generated-report.html> [more.html ...]');
+  process.exit(2);
+}
+
+let failed=0;
+for(const file of files){
+check(file);
+}
+process.exit(failed?1:0);
+
+function check(file){
+const html=fs.readFileSync(file,'utf8');
 const DATA=JSON.parse(html.match(/<script[^>]*id="report-data"[^>]*>([\s\S]*?)<\/script>/)[1]);
 
 // resLabel / resTag, taken verbatim from the template
@@ -47,8 +61,9 @@ let oldBad=0;
 if(pro) for(const s of pro.sites){ const disp=AA3[seq[s.pos-1]]||s.res; if(disp!==s.res) oldBad++; }
 
 const uniq=new Set((pro?pro.sites:[]).map(resLabel));
-console.log(`${process.argv[2].split('/').pop()}: chains=${DATA.input.chains.join('')} rows=${n}`);
+console.log(`${file.split('/').pop()}: chains=${DATA.input.chains.join('')} rows=${n}`);
 console.log(`  mislabeled now: ${bad}   (old sequence[pos-1] lookup would mislabel ${oldBad}/${pro?pro.sites.length:0})`);
 console.log(`  misplaced gold cysteines: ${seqBad}`);
 console.log(`  distinct proline labels: ${uniq.size}/${pro?pro.sites.length:0}`);
-process.exit(bad+seqBad?1:0);
+if(bad+seqBad) failed++;
+}
