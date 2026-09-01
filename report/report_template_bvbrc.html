@@ -353,7 +353,7 @@ const hideTip=()=>tip.style.opacity=0;
     T.push(`<div class="tile pro"><span class="rail"></span><div class="k">Top proline site</div>
       <div class="v">${cand.prob.toFixed(2)}</div><div class="cap">${esc(resLabel(cand))} — strongest substitution candidate</div></div>`);
     T.push(`<div class="tile pro"><span class="rail"></span><div class="k">Proline sites scored</div>
-      <div class="v">${s.length}</div><div class="cap">every residue ranked; ${nPro} already proline</div></div>`);
+      <div class="v">${s.length}</div><div class="cap">cysteines excluded; ${nPro} already proline</div></div>`);
   }
   if(hasDis){
     const s=analysis('disulfide').sites;
@@ -574,11 +574,13 @@ function renderBars(mount, rows, cls, kind){
 /* data table */
 (()=>{
   const thead=document.querySelector('#dataTable thead'), tb=document.querySelector('#dataTable tbody');
-  const cols=['Pos','Residue']; if(hasPro)cols.push('Proline p'); if(hasDis)cols.push('Disulfide p'); cols.push('Note');
-  thead.innerHTML='<tr>'+cols.map((c,k)=>`<th${k>1&&k<cols.length-1?' class="num"':''}>${esc(c)}</th>`).join('')+'</tr>';
+  const cols=(MULTICHAIN?['Chain']:[]).concat(['Pos','Residue']);
+  const firstNum=cols.length;   // score columns start after the identity columns
+  if(hasPro)cols.push('Proline p'); if(hasDis)cols.push('Disulfide p'); cols.push('Note');
+  thead.innerHTML='<tr>'+cols.map((c,k)=>`<th${k>=firstNum&&k<cols.length-1?' class="num"':''}>${esc(c)}</th>`).join('')+'</tr>';
   DATA.per_residue.forEach(r=>{
     const note=r.res==='PRO'?'already PRO':(r.is_cys?'cysteine':'');
-    let tds=`<td>${r.pos}</td><td>${esc(r.res)}</td>`;
+    let tds=(MULTICHAIN?`<td>${esc(r.chain)}</td>`:'')+`<td>${r.pos}</td><td>${esc(r.res)}</td>`;
     if(hasPro)tds+=`<td class="num">${r.proline_p==null?'—':r.proline_p.toFixed(2)}</td>`;
     if(hasDis)tds+=`<td class="num">${r.disulfide_p==null?'—':r.disulfide_p.toFixed(2)}</td>`;
     tds+=`<td style="font-family:var(--sans);color:var(--muted)">${esc(note)}</td>`;
