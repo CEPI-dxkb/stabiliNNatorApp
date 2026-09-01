@@ -84,8 +84,23 @@ ATOM   1    N  N   . THR A 1 1   ? 9.848   13.298  8.683   1.00 13.04  ? 1   THR
 The service script performs the following validation:
 
 1. **Format detection**: Checks for PDB (ATOM records) or mmCIF (data_/loop_ headers)
-2. **Structure parsing**: Validates that the file can be parsed by BioPython
-3. **Residue check**: Ensures at least one residue with CA atom exists
+2. **mmCIF conversion**: An mmCIF input is converted to PDB with Biopython
+   before the models run. Both `proliNNator.py` and
+   `predict_cysteine_probabilities.py` import only `Bio.PDB.PDBParser` and
+   have no mmCIF reader, so a `.cif` passed straight to `--pdb-path` parses
+   to an empty structure and dies with a bare `StopIteration`.
+3. **Structure parsing**: Validates that the file can be parsed by BioPython
+4. **Residue check**: Ensures at least one residue with CA atom exists
+
+Two mmCIF structures cannot be converted, because PDB format cannot represent
+them. Both are reported rather than silently truncated:
+
+| Case | Limit |
+|---|---|
+| Multi-character chain identifiers | PDB allows one character per chain |
+| More than 99,999 atoms | PDB atom serial numbers stop there |
+
+Multi-model entries are reduced to the first model, for mmCIF and PDB alike.
 
 ## Preparing Input Files
 
