@@ -112,7 +112,8 @@ figure{margin:0}
 .hcell text{font-family:var(--mono); pointer-events:none}
 /* Bars */
 .bars{display:flex; flex-direction:column; gap:6px; margin-top:4px}
-.bar-row{display:grid; grid-template-columns:118px 100px 1fr; align-items:center; gap:0 11px}
+.bar-row{display:grid; grid-template-columns:118px 1fr; align-items:center; gap:0 11px}
+.bar-row.has-tag{grid-template-columns:118px 100px 1fr}
 .bar-tag{min-width:0; white-space:nowrap}
 .bar-lab{font-family:var(--mono); font-size:12px; color:var(--body); text-align:right; white-space:nowrap}
 .bar-lab b{color:var(--ink); font-weight:700}
@@ -528,16 +529,20 @@ const hideTip=()=>tip.style.opacity=0;
 /* bar charts */
 function renderBars(mount, rows, cls, kind){
   rows.forEach(r=>{
-    const row=document.createElement('div'); row.className='bar-row';
+    // Only the proline chart can carry a badge; reserving its column in the
+    // disulfide chart would narrow those bars for nothing.
+    const row=document.createElement('div'); row.className='bar-row'+(kind==='pro'?' has-tag':'');
     const isPro=r.res==='PRO';
     const lab=document.createElement('div'); lab.className='bar-lab';
     lab.innerHTML=`<b>${esc(resLabel(r))}</b>`;
     row.appendChild(lab);
     // Own grid cell: as part of the label it overflowed the fixed-width column
     // and the bar track painted over it.
-    const tagCell=document.createElement('div'); tagCell.className='bar-tag';
-    if(kind==='pro'&&isPro){const tg=document.createElement('span');tg.className='tag';tg.textContent='already PRO';tagCell.appendChild(tg);}
-    row.appendChild(tagCell);
+    if(kind==='pro'){
+      const tagCell=document.createElement('div'); tagCell.className='bar-tag';
+      if(isPro){const tg=document.createElement('span');tg.className='tag';tg.textContent='already PRO';tagCell.appendChild(tg);}
+      row.appendChild(tagCell);
+    }
     const track=document.createElement('div'); track.className='bar-track';
     const fill=document.createElement('div'); fill.className='bar-fill '+cls; fill.style.width=Math.max(r.prob*100,1.5)+'%';
     const inside=r.prob>=0.30;
