@@ -660,9 +660,21 @@ sub _trim {
 Given parsed residue rows and an analysis type, return the rows sorted by
 probability descending, filtered as appropriate for the analysis:
 
-  * proline  - all standard residues (existing PRO kept, flagged by caller)
-  * disulfide - only CYS/CYX residues (the model annotates every residue, but
-    only cysteines are biologically meaningful for disulfide formation)
+  * proline  - all standard residues except CYS/CYX (existing PRO kept,
+    flagged by caller)
+  * disulfide - only CYS/CYX residues
+
+Both models annotate every residue in the output PDB; the filtering here is
+what makes each ranking mean what its name says.
+
+Cysteines are excluded from the proline ranking because substituting one is
+not an available move: it either breaks an existing disulfide or removes a
+free thiol, and the service scores disulfide potential separately for exactly
+those positions. Without this filter crambin's CYS 40 ranks third at 0.80 in
+the proline summary - a suggestion to break a disulfide - while the HTML
+report, which has always applied the filter (report/generate_report.py), shows
+40 sites and never lists it. The two views disagreed, and the data files were
+the wrong one.
 
 =cut
 
@@ -672,6 +684,8 @@ sub rank_sites {
     my @filtered = @$rows;
     if ($analysis eq 'disulfide') {
         @filtered = grep { $_->{resname} =~ /^(?:CYS|CYX)$/ } @filtered;
+    } else {
+        @filtered = grep { $_->{resname} !~ /^(?:CYS|CYX)$/ } @filtered;
     }
 
     return [ sort { $b->{prob} <=> $a->{prob} } @filtered ];
