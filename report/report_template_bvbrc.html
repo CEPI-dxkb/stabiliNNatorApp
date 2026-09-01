@@ -112,7 +112,8 @@ figure{margin:0}
 .hcell text{font-family:var(--mono); pointer-events:none}
 /* Bars */
 .bars{display:flex; flex-direction:column; gap:6px; margin-top:4px}
-.bar-row{display:grid; grid-template-columns:118px 1fr; align-items:center; gap:11px}
+.bar-row{display:grid; grid-template-columns:118px 100px 1fr; align-items:center; gap:0 11px}
+.bar-tag{min-width:0; white-space:nowrap}
 .bar-lab{font-family:var(--mono); font-size:12px; color:var(--body); text-align:right; white-space:nowrap}
 .bar-lab b{color:var(--ink); font-weight:700}
 .bar-track{position:relative; height:21px; background:var(--sunken); border-radius:3px; border:1px solid var(--line)}
@@ -260,7 +261,12 @@ const DATA = JSON.parse(document.getElementById('report-data').textContent);
 const SVGNS="http://www.w3.org/2000/svg";
 const el=(t,a={})=>{const e=document.createElementNS(SVGNS,t);for(const k in a)e.setAttribute(k,a[k]);return e;};
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const AA3={A:"ALA",R:"ARG",N:"ASN",D:"ASP",C:"CYS",Q:"GLN",E:"GLU",G:"GLY",H:"HIS",I:"ILE",L:"LEU",K:"LYS",M:"MET",F:"PHE",P:"PRO",S:"SER",T:"THR",W:"TRP",Y:"TYR",V:"VAL"};
+/* Residue numbering is per chain and need not start at 1, so a residue is
+   identified by chain + number. The chain is shown only when there is more
+   than one, to keep single-chain reports uncluttered. */
+const MULTICHAIN=(DATA.input.chains||[]).length>1;
+const resTag=(chain,pos)=>MULTICHAIN?`${chain}${pos}`:`${pos}`;
+const resLabel=r=>MULTICHAIN?`${r.chain} ${r.res} ${r.pos}`:`${r.res} ${r.pos}`;
 const analysis=k=>DATA.analyses.find(a=>a.key===k);
 const hasPro=!!analysis('proline'), hasDis=!!analysis('disulfide');
 const perByPos={}; DATA.per_residue.forEach(r=>perByPos[r.chain+'/'+r.pos]=r);
@@ -298,20 +304,25 @@ const hideTip=()=>tip.style.opacity=0;
     `The job analyzed ${i.name} — ${i.n_residues} residues across ${i.chains.length} chain`+
     `${i.chains.length>1?'s':''} (${i.chains.join(', ')}), including ${i.cys_positions.length} cysteine`+
     `${i.cys_positions.length===1?'':'s'}.`;
+  // Two chains can both carry a CYS 40; without the chain the list reads as
+  // a duplicate.
+  const cysLabels=(DATA.per_residue||[]).filter(p=>p.is_cys).map(p=>resTag(p.chain,p.pos));
   const dl=document.getElementById('in-dl'); const rows=[
     ['Structure', i.header? `${i.name} — ${i.header}` : i.name],
     ['File', i.file],
     ['Chains', i.chains.join(', ')||'—'],
     ['Residues', String(i.n_residues)],
-    ['Cysteines', i.cys_positions.length? `${i.cys_positions.length} · pos ${i.cys_positions.join(', ')}` : '0'],
+    ['Cysteines', cysLabels.length? `${cysLabels.length} · pos ${cysLabels.join(', ')}` : '0'],
   ];
   dl.innerHTML=rows.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('');
   if(i.title){document.getElementById('in-title').textContent=`“${i.title}”`;}
   else{document.getElementById('in-title-lab').classList.add('hidden');document.getElementById('in-title').classList.add('hidden');}
-  const cys=new Set(i.cys_positions); let html='';
-  for(let k=0;k<i.sequence.length;k++){const pos=k+1;
-    html+=cys.has(pos)?`<span class="cys">${i.sequence[k]}</span>`:i.sequence[k];
-    if(pos%10===0)html+=' ';}
+  // per_residue is index-aligned with the sequence string; cys_positions
+  // holds residue numbers, which are not sequence offsets.
+  const pr=DATA.per_residue||[]; let html='';
+  for(let k=0;k<i.sequence.length;k++){
+    html+=(pr[k]&&pr[k].is_cys)?`<span class="cys">${i.sequence[k]}</span>`:i.sequence[k];
+    if((k+1)%10===0)html+=' ';}
   document.getElementById('in-seq').innerHTML=html;
 })();
 
@@ -339,7 +350,7 @@ const hideTip=()=>tip.style.opacity=0;
     const cand=s.find(x=>!x.already_pro)||s[0];
     const nPro=s.filter(x=>x.already_pro).length;
     T.push(`<div class="tile pro"><span class="rail"></span><div class="k">Top proline site</div>
-      <div class="v">${cand.prob.toFixed(2)}</div><div class="cap">${esc(AA3[DATA.input.sequence[cand.pos-1]]||cand.res)} ${cand.pos} — strongest substitution candidate</div></div>`);
+      <div class="v">${cand.prob.toFixed(2)}</div><div class="cap">${esc(resLabel(cand))} — strongest substitution candidate</div></div>`);
     T.push(`<div class="tile pro"><span class="rail"></span><div class="k">Proline sites scored</div>
       <div class="v">${s.length}</div><div class="cap">every residue ranked; ${nPro} already proline</div></div>`);
   }
@@ -368,7 +379,7 @@ const hideTip=()=>tip.style.opacity=0;
     const cand=s.find(x=>!x.already_pro)||s[0];
     const nPro=s.filter(x=>x.already_pro).length;
     html+=`<div class="note"><b>Reading the proline scores.</b> The leading substitution candidate is `+
-      `<b>${esc(AA3[DATA.input.sequence[cand.pos-1]]||cand.res)}${cand.pos} (${cand.prob.toFixed(2)})</b>. `+
+      `<b>${esc(resLabel(cand))} (${cand.prob.toFixed(2)})</b>. `+
       `${nPro} ranked residue${nPro===1?' is':'s are'} already proline — the model recognizes its own favored motif; `+
       `these are flagged, not substitution targets.</div>`;
   }
@@ -520,16 +531,20 @@ function renderBars(mount, rows, cls, kind){
     const row=document.createElement('div'); row.className='bar-row';
     const isPro=r.res==='PRO';
     const lab=document.createElement('div'); lab.className='bar-lab';
-    lab.innerHTML=`<b>${esc(AA3[DATA.input.sequence[r.pos-1]]||r.res)} ${r.pos}</b>`;
-    if(kind==='pro'&&isPro){const tg=document.createElement('span');tg.className='tag';tg.textContent='already PRO';lab.appendChild(tg);}
+    lab.innerHTML=`<b>${esc(resLabel(r))}</b>`;
     row.appendChild(lab);
+    // Own grid cell: as part of the label it overflowed the fixed-width column
+    // and the bar track painted over it.
+    const tagCell=document.createElement('div'); tagCell.className='bar-tag';
+    if(kind==='pro'&&isPro){const tg=document.createElement('span');tg.className='tag';tg.textContent='already PRO';tagCell.appendChild(tg);}
+    row.appendChild(tagCell);
     const track=document.createElement('div'); track.className='bar-track';
     const fill=document.createElement('div'); fill.className='bar-fill '+cls; fill.style.width=Math.max(r.prob*100,1.5)+'%';
     const inside=r.prob>=0.30;
     const val=document.createElement('span'); val.className='bar-val '+(inside?'in':'out'); val.textContent=r.prob.toFixed(2);
     (inside?fill:track).appendChild(val);
     track.appendChild(fill); row.appendChild(track);
-    const html=`<b>${esc(AA3[DATA.input.sequence[r.pos-1]]||r.res)} ${r.pos}</b><br>${kind==='pro'?'proline':'disulfide'} p = ${r.prob.toFixed(2)}`+(isPro&&kind==='pro'?'<br><i>already proline</i>':'');
+    const html=`<b>${esc(resLabel(r))}</b><br>${kind==='pro'?'proline':'disulfide'} p = ${r.prob.toFixed(2)}`+(isPro&&kind==='pro'?'<br><i>already proline</i>':'');
     row.addEventListener('mousemove',e=>showTip(html,e.clientX,e.clientY));
     row.addEventListener('mouseleave',hideTip);
     mount.appendChild(row);
@@ -586,7 +601,11 @@ function renderBars(mount, rows, cls, kind){
      <p style="max-width:72ch;margin:14px 0 0">Per-residue probabilities are stabiliNNator GNN scores encoded in the PDB
      B-factor column (0–1). The disulfide model returns a per-cysteine propensity, not explicit pairings — the bonds shown
      are detected from the input structure by cysteine S–S distance (≤ 2.5 Å). Generated ${esc(DATA.generated)} by the
-     BV-BRC <code>App-StabiliNNator</code> service.</p>`+
+     BV-BRC <code>App-StabiliNNator</code> service.</p>
+     <p style="max-width:72ch;margin:10px 0 0">If you use this result in a publication, please cite:
+     Olson RD <i>et al.</i> <b>Introducing the Bacterial and Viral Bioinformatics Resource Center (BV-BRC):
+     a resource combining PATRIC, IRD and ViPR.</b> <i>Nucleic Acids Research</i> 51(D1), D678–D689 (2023).
+     <a href="https://doi.org/10.1093/nar/gkac1003" target="_blank" rel="noopener">doi:10.1093/nar/gkac1003</a></p>`+
     (DATA.source&&DATA.source.repo?`<p style="max-width:72ch;margin:10px 0 0">Prediction models: <b>stabiliNNator</b>
      (proliNNator + disulfiNNate) — source <a href="${esc(DATA.source.repo)}" target="_blank" rel="noopener">${esc(DATA.source.repo.replace(/^https?:\/\/(www\.)?github\.com\//,''))}</a>${DATA.source.commit?` @ <code>${esc(DATA.source.commit)}</code>`:''}.</p>`:'');
 })();
